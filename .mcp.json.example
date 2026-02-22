@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "nano-investigator": {
+      "command": "node",
+      "args": ["/path/to/nano-investigator/packages/mcp-server/dist/index.cjs"],
+      "env": {
+        "NANOSIEM_API_URL": "https://nanosiem.example.com:3000",
+        "NANOSIEM_API_KEY": "your-api-key-here",
+        "NANOSIEM_SEARCH_URL": "https://nanosiem.example.com:3002"
+      }
+    }
+  }
+}

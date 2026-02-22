@@ -1,0 +1,30 @@
+{
+  "name": "@nano-investigator/mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for nano SOC operations — search, triage, investigate, hunt",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "bin": {
+    "nano-investigator": "./dist/index.cjs"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@nano-investigator/core": "file:../core"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  },
+  "keywords": ["nanosiem", "soc", "security", "siem", "mcp", "investigation"],
+  "license": "MIT"
+}

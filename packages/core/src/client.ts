@@ -1,0 +1,464 @@
+/**
+ * nano API client for SOC operations
+ *
+ * Handles communication with both the main API (port 3000) and search service (port 3002)
+ */
+
+import type {
+  // Search
+  SearchRequest,
+  SearchResponse,
+  RawSqlRequest,
+  FieldStatsRequest,
+  FieldStatsResponse,
+  FieldValuesRequest,
+  FieldValuesResponse,
+  SavedSearch,
+  CreateSavedSearchRequest,
+  CreateSharedSearchRequest,
+  CreateSharedSearchResponse,
+  // Alerts
+  Alert,
+  AlertCounts,
+  AlertsListParams,
+  // Cases
+  CaseFullResponse,
+  CaseListResponse,
+  CaseWallEntry,
+  CaseStats,
+  RelatedCaseSummary,
+  CreateCaseRequest,
+  UpdateCaseRequest,
+  CaseFilter,
+  AddAlertToCaseRequest,
+  AddWallEntryRequest,
+  ChangeCaseStatusRequest,
+  MergeCasesRequest,
+  LinkNotebookRequest,
+  CaseWithDetails,
+  // Notebooks
+  NotebookWithOwner,
+  NotebookEntry,
+  NotebookReference,
+  CreateNotebookRequest,
+  UpdateNotebookRequest,
+  AddEntryRequest,
+  AddReferenceRequest,
+  ShareNotebookRequest,
+  NotebookListParams,
+  // Detections
+  DetectionRule,
+  DetectionMatchesResponse,
+  // Prevalence
+  PrevalenceData,
+  BulkPrevalenceRequest,
+  BulkPrevalenceResponse,
+  ArtifactListResponse,
+  RareArtifactsQuery,
+  NewArtifactsQuery,
+  // Risk
+  RiskOverviewResponse,
+  RiskEntitiesResponse,
+  RiskEntitiesQuery,
+  // Enrichment
+  IpLookupResult,
+  IocLookupResult,
+  // MITRE
+  MitreCoverage,
+  // Audit
+  AuditLogResponse,
+  AuditLogQuery,
+  // System
+  HealthStatus,
+  OrgContext,
+} from './types.js';
+
+export interface NanosiemClientConfig {
+  apiUrl: string;
+  searchUrl?: string;
+  apiKey: string;
+  timeout?: number;
+}
+
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: {
+    code: string;
+    message: string;
+    details?: Record<string, unknown>;
+  };
+}
+
+export class NanosiemClient {
+  private apiUrl: string;
+  private searchUrl: string;
+  private apiKey: string;
+  private timeout: number;
+
+  constructor(config: NanosiemClientConfig) {
+    this.apiUrl = config.apiUrl.replace(/\/$/, '');
+    this.searchUrl = config.searchUrl?.replace(/\/$/, '') || this.apiUrl;
+    this.apiKey = config.apiKey;
+    this.timeout = config.timeout ?? 60000;
+  }
+
+  /** Encode a path segment to prevent path traversal */
+  private encodeId(id: string): string {
+    return encodeURIComponent(id);
+  }
+
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    opts?: { useSearchUrl?: boolean; query?: Record<string, string | number | boolean | undefined> }
+  ): Promise<ApiResponse<T>> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    const baseUrl = opts?.useSearchUrl ? this.searchUrl : this.apiUrl;
+
+    let url = `${baseUrl}${path}`;
+    if (opts?.query) {
+      const params = new URLSearchParams();
+      for (const [key, value] of Object.entries(opts.query)) {
+        if (value !== undefined) {
+          params.set(key, String(value));
+        }
+      }
+      const qs = params.toString();
+      if (qs) url += `?${qs}`;
+    }
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': this.apiKey,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        return {
+          success: false,
+          error: {
+            code: `HTTP_${response.status}`,
+            message:
+              (errorBody as { error?: { message?: string } }).error?.message ||
+              (errorBody as { message?: string }).message ||
+              response.statusText,
+            details: errorBody as Record<string, unknown>,
+          },
+        };
+      }
+
+      // Handle 204 No Content
+      if (response.status === 204) {
+        return { success: true, data: undefined as T };
+      }
+
+      const data = (await response.json()) as T;
+      return { success: true, data };
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      if (error instanceof Error && error.name === 'AbortError') {
+        return {
+          success: false,
+          error: {
+            code: 'TIMEOUT',
+            message: `Request timed out after ${this.timeout}ms`,
+          },
+        };
+      }
+
+      return {
+        success: false,
+        error: {
+          code: 'NETWORK_ERROR',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        },
+      };
+    }
+  }
+
+  // ==================== Search (→ search service) ====================
+
+  async search(req: SearchRequest): Promise<ApiResponse<SearchResponse>> {
+    return this.request<SearchResponse>('POST', '/api/search', {
+      ...req,
+      table_view: req.table_view ?? true,
+      skip_field_stats: req.skip_field_stats ?? true,
+    }, { useSearchUrl: true });
+  }
+
+  async searchSql(req: RawSqlRequest): Promise<ApiResponse<SearchResponse>> {
+    return this.request<SearchResponse>('POST', '/api/search/sql', req, { useSearchUrl: true });
+  }
+
+  async explainQuery(query: string, timeRange: { start: string; end: string }): Promise<ApiResponse<{ sql: string; explanation?: string }>> {
+    return this.request<{ sql: string; explanation?: string }>('POST', '/api/search/explain', {
+      query,
+      time_range: timeRange,
+    }, { useSearchUrl: true });
+  }
+
+  async getFieldValues(req: FieldValuesRequest): Promise<ApiResponse<FieldValuesResponse>> {
+    return this.request<FieldValuesResponse>('POST', '/api/search/field-values', req, { useSearchUrl: true });
+  }
+
+  async getFieldStats(req: FieldStatsRequest): Promise<ApiResponse<FieldStatsResponse>> {
+    return this.request<FieldStatsResponse>('POST', '/api/search/field-stats', req, { useSearchUrl: true });
+  }
+
+  // ==================== Saved Searches (→ search service) ====================
+
+  async listSavedSearches(): Promise<ApiResponse<SavedSearch[]>> {
+    return this.request<SavedSearch[]>('GET', '/api/search/saved', undefined, { useSearchUrl: true });
+  }
+
+  async getSavedSearch(id: string): Promise<ApiResponse<SavedSearch>> {
+    return this.request<SavedSearch>('GET', `/api/search/saved/${this.encodeId(id)}`, undefined, { useSearchUrl: true });
+  }
+
+  async createSavedSearch(req: CreateSavedSearchRequest): Promise<ApiResponse<SavedSearch>> {
+    return this.request<SavedSearch>('POST', '/api/search/saved', req, { useSearchUrl: true });
+  }
+
+  async createSharedSearch(req: CreateSharedSearchRequest): Promise<ApiResponse<CreateSharedSearchResponse>> {
+    return this.request<CreateSharedSearchResponse>('POST', '/api/search/share', req);
+  }
+
+  // ==================== Alerts (→ api) ====================
+
+  async listAlerts(params?: AlertsListParams): Promise<ApiResponse<Alert[]>> {
+    return this.request<Alert[]>('GET', '/api/alerts', undefined, {
+      query: params as Record<string, string | number | boolean | undefined>,
+    });
+  }
+
+  async getAlert(id: string): Promise<ApiResponse<Alert>> {
+    return this.request<Alert>('GET', `/api/alerts/${this.encodeId(id)}`);
+  }
+
+  async getAlertCounts(): Promise<ApiResponse<AlertCounts>> {
+    return this.request<AlertCounts>('GET', '/api/alerts/counts');
+  }
+
+  // ==================== Cases (→ api) ====================
+
+  async listCases(params?: CaseFilter): Promise<ApiResponse<CaseListResponse>> {
+    const query: Record<string, string | number | boolean | undefined> = {};
+    if (params) {
+      if (params.status) query.status = params.status.join(',');
+      if (params.severity) query.severity = params.severity.join(',');
+      if (params.assigned_to) query.assigned_to = params.assigned_to;
+      if (params.search) query.search = params.search;
+      if (params.tags) query.tags = params.tags.join(',');
+      if (params.created_after) query.created_after = params.created_after;
+      if (params.created_before) query.created_before = params.created_before;
+      if (params.limit) query.limit = params.limit;
+      if (params.offset) query.offset = params.offset;
+    }
+    return this.request<CaseListResponse>('GET', '/api/cases', undefined, { query });
+  }
+
+  async getCase(id: string): Promise<ApiResponse<CaseFullResponse>> {
+    return this.request<CaseFullResponse>('GET', `/api/cases/${this.encodeId(id)}`);
+  }
+
+  async getCaseStats(): Promise<ApiResponse<CaseStats>> {
+    return this.request<CaseStats>('GET', '/api/cases/stats');
+  }
+
+  async createCase(req: CreateCaseRequest): Promise<ApiResponse<CaseWithDetails>> {
+    return this.request<CaseWithDetails>('POST', '/api/cases', req);
+  }
+
+  async updateCase(id: string, req: UpdateCaseRequest): Promise<ApiResponse<CaseWithDetails>> {
+    return this.request<CaseWithDetails>('PUT', `/api/cases/${this.encodeId(id)}`, req);
+  }
+
+  async changeCaseStatus(id: string, req: ChangeCaseStatusRequest): Promise<ApiResponse<void>> {
+    return this.request<void>('POST', `/api/cases/${id}/status`, req);
+  }
+
+  async assignCase(id: string, userId: string): Promise<ApiResponse<void>> {
+    return this.request<void>('POST', `/api/cases/${id}/assign`, { assigned_to: userId });
+  }
+
+  async addAlertToCase(caseId: string, req: AddAlertToCaseRequest): Promise<ApiResponse<void>> {
+    return this.request<void>('POST', `/api/cases/${this.encodeId(caseId)}/alerts`, req);
+  }
+
+  async getCaseWall(id: string): Promise<ApiResponse<CaseWallEntry[]>> {
+    return this.request<CaseWallEntry[]>('GET', `/api/cases/${id}/wall`);
+  }
+
+  async addCaseWallEntry(caseId: string, req: AddWallEntryRequest): Promise<ApiResponse<CaseWallEntry>> {
+    return this.request<CaseWallEntry>('POST', `/api/cases/${this.encodeId(caseId)}/wall`, req);
+  }
+
+  async getRelatedCases(id: string): Promise<ApiResponse<RelatedCaseSummary[]>> {
+    return this.request<RelatedCaseSummary[]>('GET', `/api/cases/${id}/related`);
+  }
+
+  async mergeCases(id: string, req: MergeCasesRequest): Promise<ApiResponse<void>> {
+    return this.request<void>('POST', `/api/cases/${id}/merge`, req);
+  }
+
+  async linkNotebookToCase(caseId: string, req: LinkNotebookRequest): Promise<ApiResponse<void>> {
+    return this.request<void>('POST', `/api/cases/${this.encodeId(caseId)}/notebook`, req);
+  }
+
+  // ==================== Notebooks (→ api) ====================
+
+  async listNotebooks(params?: NotebookListParams): Promise<ApiResponse<NotebookWithOwner[]>> {
+    return this.request<NotebookWithOwner[]>('GET', '/api/notebooks', undefined, {
+      query: params as Record<string, string | number | boolean | undefined>,
+    });
+  }
+
+  async getNotebook(id: string): Promise<ApiResponse<NotebookWithOwner>> {
+    return this.request<NotebookWithOwner>('GET', `/api/notebooks/${this.encodeId(id)}`);
+  }
+
+  async getNotebookEntries(id: string): Promise<ApiResponse<NotebookEntry[]>> {
+    return this.request<NotebookEntry[]>('GET', `/api/notebooks/${id}/entries`);
+  }
+
+  async createNotebook(req: CreateNotebookRequest): Promise<ApiResponse<NotebookWithOwner>> {
+    return this.request<NotebookWithOwner>('POST', '/api/notebooks', req);
+  }
+
+  async addNotebookEntry(id: string, req: AddEntryRequest): Promise<ApiResponse<NotebookEntry>> {
+    return this.request<NotebookEntry>('POST', `/api/notebooks/${id}/entries`, req);
+  }
+
+  async getNotebookReferences(id: string): Promise<ApiResponse<NotebookReference[]>> {
+    return this.request<NotebookReference[]>('GET', `/api/notebooks/${id}/references`);
+  }
+
+  async addNotebookReference(id: string, req: AddReferenceRequest): Promise<ApiResponse<NotebookReference>> {
+    return this.request<NotebookReference>('POST', `/api/notebooks/${id}/references`, req);
+  }
+
+  async findNotebooksByReference(referenceType: string, referenceId: string): Promise<ApiResponse<NotebookWithOwner[]>> {
+    return this.request<NotebookWithOwner[]>('GET', '/api/notebooks/by-reference', undefined, {
+      query: { reference_type: referenceType, reference_id: referenceId },
+    });
+  }
+
+  async updateNotebook(id: string, req: UpdateNotebookRequest): Promise<ApiResponse<NotebookWithOwner>> {
+    return this.request<NotebookWithOwner>('PUT', `/api/notebooks/${this.encodeId(id)}`, req);
+  }
+
+  async shareNotebook(id: string, req: ShareNotebookRequest): Promise<ApiResponse<void>> {
+    return this.request<void>('POST', `/api/notebooks/${id}/share`, req);
+  }
+
+  // ==================== Detections (→ api, routes use /api/rules) ====================
+
+  async listDetections(): Promise<ApiResponse<DetectionRule[]>> {
+    return this.request<DetectionRule[]>('GET', '/api/rules');
+  }
+
+  async getDetection(id: string): Promise<ApiResponse<DetectionRule>> {
+    return this.request<DetectionRule>('GET', `/api/rules/${this.encodeId(id)}`);
+  }
+
+  async getDetectionMatches(id: string): Promise<ApiResponse<DetectionMatchesResponse>> {
+    return this.request<DetectionMatchesResponse>('GET', `/api/rules/${id}/matches`);
+  }
+
+  // ==================== Prevalence (→ api) ====================
+
+  async getHashPrevalence(hash: string): Promise<ApiResponse<{ data: PrevalenceData }>> {
+    return this.request<{ data: PrevalenceData }>('GET', `/api/prevalence/hash/${this.encodeId(hash)}`);
+  }
+
+  async getDomainPrevalence(domain: string): Promise<ApiResponse<{ data: PrevalenceData }>> {
+    return this.request<{ data: PrevalenceData }>('GET', `/api/prevalence/domain/${this.encodeId(domain)}`);
+  }
+
+  async bulkPrevalence(req: BulkPrevalenceRequest): Promise<ApiResponse<BulkPrevalenceResponse>> {
+    return this.request<BulkPrevalenceResponse>('POST', '/api/prevalence/bulk', req);
+  }
+
+  async getRareArtifacts(params?: RareArtifactsQuery): Promise<ApiResponse<ArtifactListResponse>> {
+    return this.request<ArtifactListResponse>('GET', '/api/prevalence/rare', undefined, {
+      query: params as Record<string, string | number | boolean | undefined>,
+    });
+  }
+
+  async getNewArtifacts(params?: NewArtifactsQuery): Promise<ApiResponse<ArtifactListResponse>> {
+    return this.request<ArtifactListResponse>('GET', '/api/prevalence/new', undefined, {
+      query: params as Record<string, string | number | boolean | undefined>,
+    });
+  }
+
+  // ==================== Risk (→ api) ====================
+
+  async getRiskyEntities(params?: RiskEntitiesQuery): Promise<ApiResponse<RiskEntitiesResponse>> {
+    return this.request<RiskEntitiesResponse>('GET', '/api/risk/entities', undefined, {
+      query: params as Record<string, string | number | boolean | undefined>,
+    });
+  }
+
+  async getRiskOverview(): Promise<ApiResponse<RiskOverviewResponse>> {
+    return this.request<RiskOverviewResponse>('GET', '/api/risk/overview');
+  }
+
+  async getEntityRiskTimeline(entity: string, entityType?: string): Promise<ApiResponse<RiskEntitiesResponse>> {
+    return this.request<RiskEntitiesResponse>('GET', '/api/risk/time-windowed', undefined, {
+      query: { entity, entity_type: entityType },
+    });
+  }
+
+  // ==================== Enrichment (→ api) ====================
+
+  async lookupIp(ip: string): Promise<ApiResponse<IpLookupResult>> {
+    return this.request<IpLookupResult>('GET', `/api/enrichment/lookup/${this.encodeId(ip)}`);
+  }
+
+  async lookupIoc(value: string): Promise<ApiResponse<IocLookupResult>> {
+    return this.request<IocLookupResult>('GET', `/api/enrichment/ioc/lookup/${encodeURIComponent(value)}`);
+  }
+
+  // ==================== MITRE (→ api) ====================
+
+  async getMitreData(): Promise<ApiResponse<Record<string, unknown>>> {
+    return this.request<Record<string, unknown>>('GET', '/api/mitre');
+  }
+
+  async getMitreCoverage(): Promise<ApiResponse<MitreCoverage>> {
+    return this.request<MitreCoverage>('GET', '/api/mitre/coverage');
+  }
+
+  // ==================== System (→ api) ====================
+
+  async getSourceTypes(): Promise<ApiResponse<string[]>> {
+    return this.request<string[]>('GET', '/api/source-types');
+  }
+
+  async getOrgContext(): Promise<ApiResponse<OrgContext>> {
+    return this.request<OrgContext>('GET', '/api/settings/organizational-context');
+  }
+
+  async healthCheck(): Promise<ApiResponse<HealthStatus>> {
+    return this.request<HealthStatus>('GET', '/health');
+  }
+
+  async getAuditTrail(params?: AuditLogQuery): Promise<ApiResponse<AuditLogResponse>> {
+    return this.request<AuditLogResponse>('GET', '/api/audit', undefined, {
+      query: params as Record<string, string | number | boolean | undefined>,
+    });
+  }
+}

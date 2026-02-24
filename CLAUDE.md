@@ -52,6 +52,17 @@
 4. **Present** — Summarize findings at each checkpoint. Don't silently investigate.
 5. **Recommend** — FP/TP assessment, immediate actions, follow-ups.
 
+## Resuming Existing Cases
+
+When an analyst asks to review, continue, or investigate an existing case (e.g. "investigate case 1234", "let's look at case 42"):
+1. Call `review_case(id)` FIRST — this loads the full case context including all notebook entries in a single call
+2. Summarize what's already been found: key entities, IOCs, timeline, current status
+3. Identify gaps or threads that weren't fully explored
+4. Propose next investigation steps based on what's missing
+5. Continue adding findings to the existing notebook(s) rather than creating new ones
+
+This is different from starting a fresh investigation from an alert — `review_case` is for picking up existing work.
+
 ## Entity Investigation Patterns
 
 - **IP** — get_entity_context → lookup_ip → search activity → check alerts/cases

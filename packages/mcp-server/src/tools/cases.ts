@@ -59,6 +59,21 @@ export const TOOLS = [
     },
   },
   {
+    name: 'review_case',
+    description:
+      'Load full investigation context for a case in a single call. Returns the case details, case wall history, and all linked notebooks with their entries. Use this as the FIRST tool call when an analyst wants to review, continue, or investigate an existing case — it loads all prior findings so you can pick up where the investigation left off.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        id: {
+          type: 'string',
+          description: 'Case ID or case number',
+        },
+      },
+      required: ['id'],
+    },
+  },
+  {
     name: 'get_case_stats',
     description:
       'Get case workload overview: counts by status and severity, average resolution time.',
@@ -294,6 +309,62 @@ export async function handleCasesTool(
       const res = await client.getCase(id);
       if (!res.success) return err(`Failed to get case ${id}: ${res.error?.message}`);
       return ok(res.data);
+    }
+
+    case 'review_case': {
+      const id = args.id as string;
+
+      // Fetch case details, wall, and linked notebooks in parallel
+      const [caseRes, wallRes, notebooksRes] = await Promise.all([
+        client.getCase(id),
+        client.getCaseWall(id),
+        client.listNotebooks({ case_id: id }),
+      ]);
+
+      if (!caseRes.success) return err(`Failed to get case ${id}: ${caseRes.error?.message}`);
+
+      const errors: string[] = [];
+      if (!wallRes.success) errors.push(`Case wall: ${wallRes.error?.message}`);
+      if (!notebooksRes.success) errors.push(`Notebooks list: ${notebooksRes.error?.message}`);
+
+      // Fetch notebook details in batches of 5 to avoid overwhelming the API
+      const notebooks = notebooksRes.success && notebooksRes.data ? notebooksRes.data : [];
+      const BATCH_SIZE = 5;
+      const notebookDetails: Array<{
+        notebook: (typeof notebooks)[number];
+        entries: unknown[];
+        references: unknown[];
+        errors?: string[];
+      }> = [];
+
+      for (let i = 0; i < notebooks.length; i += BATCH_SIZE) {
+        const batch = notebooks.slice(i, i + BATCH_SIZE);
+        const batchResults = await Promise.all(
+          batch.map(async (nb) => {
+            const [entriesRes, refsRes] = await Promise.all([
+              client.getNotebookEntries(nb.id),
+              client.getNotebookReferences(nb.id),
+            ]);
+            const nbErrors: string[] = [];
+            if (!entriesRes.success) nbErrors.push(`Entries: ${entriesRes.error?.message}`);
+            if (!refsRes.success) nbErrors.push(`References: ${refsRes.error?.message}`);
+            return {
+              notebook: nb,
+              entries: entriesRes.success ? entriesRes.data : [],
+              references: refsRes.success ? refsRes.data : [],
+              ...(nbErrors.length > 0 ? { errors: nbErrors } : {}),
+            };
+          })
+        );
+        notebookDetails.push(...batchResults);
+      }
+
+      return ok({
+        case: caseRes.data,
+        wall: wallRes.success ? wallRes.data : [],
+        notebooks: notebookDetails,
+        ...(errors.length > 0 ? { errors } : {}),
+      });
     }
 
     case 'get_case_stats': {

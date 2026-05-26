@@ -35,21 +35,105 @@ export function parseRelativeTime(time: string): string {
 
 export const TOOLS = [
   {
+    name: 'search_sql',
+    description:
+      'PRIMARY search tool. Run a ClickHouse SQL SELECT against the SIEM log store.\n' +
+      '\n' +
+      'On first use in a session, call `get_schema` to load the UDM column inventory. For canonical query recipes (prevalence lookups, top-N, time bucketing, ASOF identity joins, etc.) read the `nano://sql-guide` resource.\n' +
+      '\n' +
+      'PERFORMANCE RULES — follow every time:\n' +
+      '  1. PREWHERE holds the timestamp filter plus indexed equality predicates (src_ip, dest_ip, user, source_type, event_type, file_hash, domain). WHERE holds free-text, regex, and complex booleans. The timestamp filter is non-negotiable — without it, ClickHouse cannot prune daily partitions and scans everything:\n' +
+      "       PREWHERE timestamp >= '...' AND timestamp <= '...'\n" +
+      "         AND lower(source_type) = lower(\'windows\')\n" +
+      "       WHERE lower(message) iLike \'%logon failure%\'\n" +
+      '  2. Case-insensitive free-text search: use `lower(field) iLike \'%needle%\'`. Text indexes (splitByNonAlpha tokenizer, granularity 1) on `lower(message)`, `lower(command_line)`, `lower(user)`, `lower(process_name)`, `lower(file_path)`, etc. keep this fast. **Do NOT use `hasToken(...)` for variable-length needles — it silently misses substrings (NAN-1026).**\n' +
+      '  3. `lower()` consistency — case-sensitive fields like `source_type` need `lower()` on both sides of the comparison.\n' +
+      '  4. **`ext` is a ClickHouse JSON column** — access with `ext.field_name` or `ext[\'field_name\']`, NOT JSONExtract. Use JSONExtract only on the legacy `metadata` String column.\n' +
+      '  5. UDM columns are real columns (src_ip, process_name, user, file_hash, etc.) — access directly, never through `ext`.\n' +
+      '  6. Always include an explicit LIMIT. Default 100 unless the user asks otherwise. Backend caps at 100k.\n' +
+      '  7. Tables (allowlisted): `logs` (raw events), `signals` (detection matches), `*_prevalence_summary` / `*_prevalence_agg` (prevalence — AggregatingMergeTree, query with uniqMerge for host_count), `identity_observations` (use ASOF JOIN for IP→hostname enrichment).\n' +
+      '\n' +
+      'TIME RANGE:\n' +
+      '  - Both `start_time` and `end_time` are optional; omit both for the last 24h default.\n' +
+      '  - Accept relative ("-1h", "-7d", "-30m"), "now", or ISO 8601.\n' +
+      '  - You must STILL include `timestamp >= ? AND timestamp <= ?` (or `BETWEEN`) in PREWHERE — the time params bind the request envelope; the SQL controls partition pruning.\n' +
+      '\n' +
+      'EXAMPLE:\n' +
+      '  SELECT timestamp, src_ip, user, message\n' +
+      '  FROM logs\n' +
+      "  PREWHERE timestamp BETWEEN \'2026-05-25T00:00:00Z\' AND \'2026-05-26T00:00:00Z\'\n" +
+      "    AND lower(source_type) = lower(\'windows\')\n" +
+      "  WHERE lower(message) iLike \'%logon failure%\'\n" +
+      '  ORDER BY timestamp DESC\n' +
+      '  LIMIT 100\n' +
+      '\n' +
+      'Only SELECT is accepted; DROP/INSERT/UPDATE/etc. are rejected. Dangerous functions (SLEEP, HOSTNAME, system introspection) are blocked.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        sql: {
+          type: 'string',
+          description: 'The ClickHouse SELECT query. Must include a timestamp filter in PREWHERE for partition pruning.',
+        },
+        start_time: {
+          type: 'string',
+          description: 'Start of the time range envelope. Relative ("-24h"), "now", or ISO 8601. Optional — defaults to 24h before end_time.',
+        },
+        end_time: {
+          type: 'string',
+          description: 'End of the time range envelope. Relative, "now", or ISO 8601. Optional — defaults to "now".',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum result rows (backend cap is 100k).',
+        },
+      },
+      required: ['sql'],
+    },
+  },
+  {
+    name: 'get_schema',
+    description:
+      'Return the UDM (Unified Data Model) schema for the log store. Call this before writing SQL the first time in a session so you know which columns exist and avoid hallucinating field names.\n' +
+      '\n' +
+      'Returns:\n' +
+      '  - `udm_fields`: explicit columns with name, column_name, data_type, category, description. Several hundred fields grouped by category (Auth, Network, Process, File, Enrichment, Prevalence, etc.). When `category` is set, this is filtered; the inventory below stays complete.\n' +
+      '  - `all_categories`: every UDM category and its total field count (always full, even when `category` filter is set — gives you a map of what else exists).\n' +
+      '  - `ext_fields`: observed JSON keys in the `ext` column for per-source structured data.\n' +
+      '  - `warnings` (optional): non-fatal issues encountered while loading the schema (e.g. ext fetch failed).\n' +
+      '\n' +
+      'When writing SQL: prefer UDM columns directly. For non-UDM data, the `ext` column is a ClickHouse JSON type — access with `ext.field_name` or `ext[\'field_name\']`, NOT JSONExtract.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        category: {
+          type: 'string',
+          description: 'Optional. Filter UDM fields to a single category (e.g. "Network", "Process", "Auth", "Enrichment"). Omit to return all fields.',
+        },
+        include_ext: {
+          type: 'boolean',
+          description: 'Whether to include observed ext field names. Defaults to true.',
+        },
+      },
+      required: [],
+    },
+  },
+  {
     name: 'search',
     description:
-      'Execute an nPL (nano Pipe Language) query against the SIEM log data. ' +
-      'This is the primary investigation tool for hunting through security events. ' +
-      'nPL uses a piped syntax: a search term followed by optional pipe commands. ' +
+      'Execute an nPL (nano Pipe Language) query — Splunk-compatible piped syntax — against the SIEM log data.\n' +
+      '\n' +
+      'PREFER `search_sql` for most queries. Use nPL when:\n' +
+      '  - The user explicitly asks for piped / SPL-style syntax\n' +
+      '  - You are translating an existing Splunk SPL query the user pasted in\n' +
+      '  - You want a quick stats/timechart aggregation without writing the SQL\n' +
+      '\n' +
       'Examples:\n' +
-      '  - Simple keyword: "authentication failure"\n' +
-      '  - Field match: "src_ip=192.168.1.50"\n' +
-      '  - With aggregation: "src_ip=10.0.0.0/8 | stats count by dest_ip, dest_port | sort -count"\n' +
-      '  - Regex: "user=/admin.*/i | where auth_result=failure"\n' +
-      '  - Time chart: "source_type=firewall | timechart span=1h count by action"\n' +
-      '  - Table output: "process_name=powershell.exe | table timestamp, user, command_line, src_host"\n' +
+      '  - "src_ip=10.0.0.0/8 | stats count by dest_ip, dest_port | sort -count"\n' +
+      '  - "process_name=powershell.exe | table timestamp, user, command_line"\n' +
+      '  - "source_type=firewall | timechart span=1h count by action"\n' +
       'Pipe commands: stats, where, sort, head, table, timechart, eval, dedup, rename, rex.\n' +
-      'Time arguments accept relative formats: "-15m", "-1h", "-7d", "-2w", or "now", or ISO 8601 timestamps.\n' +
-      'Use source_type to scope to a specific log source (e.g. "windows", "firewall", "dns").',
+      'Time arguments accept relative ("-15m", "-1h", "-7d"), "now", or ISO 8601.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -75,37 +159,6 @@ export const TOOLS = [
         },
       },
       required: ['query', 'start_time'],
-    },
-  },
-  {
-    name: 'search_sql',
-    description:
-      'Execute a raw SQL query directly against the ClickHouse log store. ' +
-      'Use this when you need precise control over the query that nPL cannot express, ' +
-      'such as complex joins or ClickHouse-specific functions. ' +
-      'The query must be a SELECT statement. Dangerous functions are blocked. ' +
-      'Always include timestamp filters for partition pruning.',
-    inputSchema: {
-      type: 'object' as const,
-      properties: {
-        sql: {
-          type: 'string',
-          description: 'The raw SQL SELECT query to execute against ClickHouse.',
-        },
-        start_time: {
-          type: 'string',
-          description: 'Start of the time range. Relative or ISO 8601 timestamp.',
-        },
-        end_time: {
-          type: 'string',
-          description: 'End of the time range. Relative or ISO 8601 timestamp.',
-        },
-        limit: {
-          type: 'number',
-          description: 'Maximum number of results to return.',
-        },
-      },
-      required: ['sql', 'start_time', 'end_time'],
     },
   },
   {
@@ -307,8 +360,8 @@ export async function handleSearchTool(
       // ---------------------------------------------------------------
       case 'search_sql': {
         const sql = args.sql as string;
-        const startTime = parseRelativeTime(args.start_time as string);
-        const endTime = parseRelativeTime(args.end_time as string);
+        const endTime = parseRelativeTime((args.end_time as string) ?? 'now');
+        const startTime = parseRelativeTime((args.start_time as string) ?? '-24h');
         const limit = args.limit as number | undefined;
 
         const result = await client.searchSql({
@@ -326,6 +379,63 @@ export async function handleSearchTool(
 
         return {
           content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+        };
+      }
+
+      // ---------------------------------------------------------------
+      // get_schema
+      // ---------------------------------------------------------------
+      case 'get_schema': {
+        const category = args.category as string | undefined;
+        const includeExt = (args.include_ext as boolean | undefined) ?? true;
+
+        const [udmResult, extResult] = await Promise.all([
+          client.getUdmFields(),
+          includeExt ? client.getExtFields() : Promise.resolve(null),
+        ]);
+
+        if (!udmResult.success) {
+          return {
+            content: [{ type: 'text', text: `Error: ${udmResult.error?.message ?? 'Failed to load UDM schema'}` }],
+            isError: true,
+          };
+        }
+
+        const allFields = udmResult.data?.fields ?? [];
+        const filtered = category
+          ? allFields.filter((f) => f.category.toLowerCase() === category.toLowerCase())
+          : allFields;
+
+        const categoryCounts = allFields.reduce<Record<string, number>>((acc, f) => {
+          acc[f.category] = (acc[f.category] ?? 0) + 1;
+          return acc;
+        }, {});
+
+        const warnings: string[] = [];
+        const response: Record<string, unknown> = {
+          udm_fields: filtered,
+          udm_field_count: filtered.length,
+          all_categories: Object.entries(categoryCounts)
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count),
+        };
+
+        if (includeExt && extResult) {
+          if (extResult.success) {
+            response.ext_fields = extResult.data ?? [];
+          } else {
+            warnings.push(
+              `ext_fields unavailable: ${extResult.error?.message ?? 'unknown error'}. The /api/fields/ext endpoint may not exist on this nano version.`,
+            );
+          }
+        }
+
+        if (warnings.length > 0) {
+          response.warnings = warnings;
+        }
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
         };
       }
 

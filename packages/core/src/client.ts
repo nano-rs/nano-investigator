@@ -13,6 +13,7 @@ import type {
   FieldStatsResponse,
   FieldValuesRequest,
   FieldValuesResponse,
+  UdmFieldsResponse,
   SavedSearch,
   CreateSavedSearchRequest,
   CreateSharedSearchRequest,
@@ -446,6 +447,14 @@ export class NanosiemClient {
 
   async getSourceTypes(): Promise<ApiResponse<string[]>> {
     return this.request<string[]>('GET', '/api/source-types');
+  }
+
+  async getUdmFields(): Promise<ApiResponse<UdmFieldsResponse>> {
+    return this.request<UdmFieldsResponse>('GET', '/api/udm/fields');
+  }
+
+  async getExtFields(): Promise<ApiResponse<string[]>> {
+    return this.request<string[]>('GET', '/api/fields/ext');
   }
 
   async getOrgContext(): Promise<ApiResponse<OrgContext>> {

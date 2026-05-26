@@ -80,6 +80,8 @@ After gathering context, assess:
 ## Phase 3 — Deep Dive (only the interesting branches)
 Based on entity type:
 
+**Tool choice for Phase 3 queries:** The example queries below are nPL and idiomatic — use them as-is. Reach for \`search_sql\` instead when you need: cross-table joins (logs ↔ signals, ASOF \`identity_observations\` for IP→host resolution), JSON \`ext.*\` column access for source-specific fields, or \`uniqMerge\` aggregates against \`*_prevalence_summary\` tables. Call \`get_schema\` if you're unsure what columns are available.
+
 ${entityType === 'ip' ? `**IP Investigation:**
 - What internal hosts communicated with it? What ports/protocols?
 - Is it associated with any known threats? (IOC check)
@@ -138,7 +140,7 @@ Time range: ${timeRange}
 - What MITRE ATT&CK techniques are relevant? Use get_mitre_technique to understand them.
 - What log sources do we need? Use get_source_types to confirm availability.
 - What specific artifacts, behaviors, or indicators should we look for?
-- Design 3-5 targeted nPL queries.
+- Design 3-5 targeted searches. Use \`search\` (nPL) for terse \`| stats\` / \`| table\` patterns; reach for \`search_sql\` when the hunt needs joins (logs ↔ signals, ASOF identity), JSON \`ext.*\` access, or \`uniqMerge\` against prevalence summary tables.
 
 ## Step 2: BUILD AND RUN QUERIES
 - Run each query with the ${timeRange} lookback

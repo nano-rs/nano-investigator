@@ -54,9 +54,10 @@ Follow this investigation process:
    - For external IPs, call lookup_ip for GeoIP and lookup_ioc for threat intel
    - For hashes/domains, check prevalence with get_prevalence
 
-5. **SEARCH** for related activity — run 1-2 focused nPL queries to expand context:
+5. **SEARCH** for related activity — run 1-2 focused queries to expand context:
    - What else did the alerting entity do around the same time?
    - Are there similar patterns from other entities?
+   - Tool choice: prefer \`search\` (nPL) for piped \`| stats\` / \`| table\` patterns scoped to one host or entity. Reach for \`search_sql\` when you need cross-table joins (logs ↔ signals, ASOF identity), JSON \`ext.*\` column access, or aggregates against \`*_prevalence_summary\` (uniqMerge). Call \`get_schema\` first if you're unsure what columns exist.
 
 6. **CHECK HISTORY** — call get_related_cases to see if we've investigated this before:
    - If a related case exists, what was the disposition? Was it FP or TP?

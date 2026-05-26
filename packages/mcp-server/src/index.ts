@@ -83,6 +83,7 @@ import { TOOLS as SYSTEM_TOOLS, handleSystemTool } from './tools/system.js';
 // Resources
 import { UDM_SCHEMA_RESOURCE, UDM_SCHEMA_CONTENT, UDM_SCHEMA_URI } from './resources/udm-schema.js';
 import { NPL_REFERENCE_RESOURCE, NPL_REFERENCE_CONTENT, NPL_REFERENCE_URI } from './resources/npl-reference.js';
+import { SQL_GUIDE_RESOURCE, SQL_GUIDE_CONTENT, SQL_GUIDE_URI } from './resources/sql-guide.js';
 import { getPlaybookResources, getPlaybookContent, PLAYBOOK_URI_PREFIX } from './resources/playbooks.js';
 
 // Prompts
@@ -190,11 +191,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // ==================== Resource Handlers ====================
 
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-  resources: [UDM_SCHEMA_RESOURCE, NPL_REFERENCE_RESOURCE, ...getPlaybookResources()],
+  resources: [SQL_GUIDE_RESOURCE, UDM_SCHEMA_RESOURCE, NPL_REFERENCE_RESOURCE, ...getPlaybookResources()],
 }));
 
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const { uri } = request.params;
+
+  if (uri === SQL_GUIDE_URI) {
+    return {
+      contents: [{ uri, mimeType: 'text/markdown', text: SQL_GUIDE_CONTENT }],
+    };
+  }
 
   if (uri === UDM_SCHEMA_URI) {
     return {
@@ -255,7 +262,7 @@ async function main(): Promise<void> {
 
   console.error('nano-investigator MCP server started');
   console.error(`Tools: ${ALL_TOOLS.length}`);
-  console.error(`Resources: ${2 + getPlaybookResources().length}`);
+  console.error(`Resources: ${3 + getPlaybookResources().length}`);
   console.error(`Prompts: ${ALL_PROMPTS.length}`);
   console.error('');
   console.error('Required environment variables:');

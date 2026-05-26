@@ -91,6 +91,22 @@ export interface FieldValuesResponse {
 }
 
 // ============================================================================
+// UDM Schema Types
+// ============================================================================
+
+export interface UdmFieldInfo {
+  name: string;
+  column_name: string;
+  data_type: string;
+  category: string;
+  description: string;
+}
+
+export interface UdmFieldsResponse {
+  fields: UdmFieldInfo[];
+}
+
+// ============================================================================
 // Saved Search Types
 // ============================================================================
 

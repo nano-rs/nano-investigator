@@ -17,7 +17,7 @@ export const UDM_SCHEMA_CONTENT = `# nano UDM Field Reference
 ## Core Fields (always available)
 - **timestamp** (DateTime) — Event timestamp. Always filter on this for partition pruning.
 - **source_type** (String) — Log source identifier (e.g., "windows_security", "sysmon", "firewall_paloalto"). Use in queries for PREWHERE optimization.
-- **message** (String) — Raw log message. Search via \`message_search\` column with \`hasToken()\`.
+- **message** (String) — Raw log message. Search via \`lower(message) iLike '%term%'\` (text indexes with splitByNonAlpha tokenizer keep this fast).
 - **event_type** (String) — Normalized event type.
 - **action** (String) — Action performed (e.g., "login_failed", "file_created", "connection_established").
 - **severity** (String) — Event severity level.
@@ -140,19 +140,19 @@ cloud_region NOT IN ("us-east-1", "eu-west-1") | stats count by user, cloud_regi
 - **ioc_match**, **ioc_type**, **ioc_threat_type** — IOC feed matches
 - **prevalence_file_hash**, **prevalence_dest_ip** — Prevalence scores
 
-## Search Column Optimization
-For case-insensitive text search, nano uses materialized \`_search\` columns with bloom filter indexes:
-- \`message_search\` — for message field
-- \`process_path_search\` — for process paths
-- \`url_search\` — for URLs
-- \`command_line_search\` — for command lines
+## Free-text Search Optimization
+For case-insensitive text search, use \`lower(field) iLike '%needle%'\`. Text indexes (splitByNonAlpha tokenizer, granularity 1) on \`lower(message)\`, \`lower(command_line)\`, \`lower(user)\`, \`lower(process_name)\`, \`lower(file_path)\`, \`lower(parent_command_line)\`, \`lower(src_user)\`, \`lower(dest_user)\` keep this fast.
 
-nPL handles this automatically — just search normally. If writing raw SQL, use \`hasToken(message_search, lower('term'))\`.
+**Do not** use \`hasToken()\` for variable-length needles — it silently misses substrings (NAN-1026). Older docs referencing \`_search\` materialized columns are stale; those columns no longer exist.
+
+In nPL, free-text search is handled automatically — just search normally.
 
 ## The ext Column
-Fields not in the UDM schema go into \`ext\` (JSON column). Access with JSONExtract:
+Fields not in the UDM schema go into \`ext\` — a true ClickHouse JSON column (not a String). Access with dot notation in both SQL and nPL:
 \`\`\`sql
-JSONExtractString(ext, 'custom_field')
+SELECT ext.custom_field, ext['key.with.dots'] FROM logs WHERE ext.event_id = 4624
 \`\`\`
-In nPL, use dot notation: \`ext.custom_field\`
+Do NOT use \`JSONExtract\` on \`ext\` — that's for the legacy \`metadata\` String column on older rows.
+
+See \`nano://sql-guide\` for canonical query recipes (prevalence, top-N, time bucketing, ASOF identity joins).
 `;

@@ -41,21 +41,6 @@ export const TOOLS = [
       required: ['ip'],
     },
   },
-  {
-    name: 'lookup_ioc',
-    description:
-      'Check if a value (domain, IP, or hash) is a known Indicator of Compromise (IOC). Searches threat intelligence feeds including ThreatFox and Tor exit node lists. Returns match status, threat type, malware family, confidence level, and references.',
-    inputSchema: {
-      type: 'object' as const,
-      properties: {
-        value: {
-          type: 'string',
-          description: 'IOC value to check (domain, IP address, or file hash)',
-        },
-      },
-      required: ['value'],
-    },
-  },
 ];
 
 export async function handleEnrichmentTool(
@@ -85,20 +70,6 @@ export async function handleEnrichmentTool(
               if (res.success) results.geo = res.data;
             })
           );
-          promises.push(
-            client.lookupIoc(value).then((res) => {
-              if (res.success) results.ioc = res.data;
-            })
-          );
-        }
-
-        // Domain/hash IOC check
-        if (entityType === 'domain' || entityType === 'hash') {
-          promises.push(
-            client.lookupIoc(value).then((res) => {
-              if (res.success) results.ioc = res.data;
-            })
-          );
         }
 
         // Risk score for this specific entity
@@ -124,12 +95,6 @@ export async function handleEnrichmentTool(
       case 'lookup_ip': {
         const res = await client.lookupIp(args.ip as string);
         if (!res.success) return err(res.error?.message ?? 'Failed to look up IP');
-        return ok(res.data);
-      }
-
-      case 'lookup_ioc': {
-        const res = await client.lookupIoc(args.value as string);
-        if (!res.success) return err(res.error?.message ?? 'Failed to look up IOC');
         return ok(res.data);
       }
 

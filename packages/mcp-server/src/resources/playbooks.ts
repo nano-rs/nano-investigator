@@ -31,7 +31,7 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 ## Step 3: Entity Context
 - Who owns this IP? (get_entity_context)
 - Is it internal or external? (lookup_ip → GeoIP)
-- Is it a known scanner? (lookup_ioc)
+- Is it a known scanner? (filter search on ioc_matched / ioc_threat_type)
 - Have we seen this IP before? (get_prevalence)
 
 ## Step 4: Blast Radius (if successful auth)
@@ -150,7 +150,7 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 ## Step 4: Network Activity
 - What did the suspicious process connect to?
 - Query: \`src_host="{host}" process_name="{process}" | where dest_ip != "" | stats count by dest_ip, dest_port\`
-- Check destinations with lookup_ip and lookup_ioc
+- Check destinations with lookup_ip; flag threat-intel hits via the ioc_matched / ioc_threat_type columns
 
 ## Step 5: File Activity
 - What files did the process create/modify?
@@ -197,7 +197,7 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 5: Campaign Scope
 - Is this part of a larger campaign?
-- Check the sending domain with lookup_ioc
+- Check the sending domain for threat-intel hits (ioc_matched / ioc_threat_type in search)
 - Query: \`email_from=/.*@{sending_domain}$/ | stats count, dc(email_to) as targets by email_subject\`
 
 ## Step 6: Recommend Action

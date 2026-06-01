@@ -63,7 +63,7 @@ Time range: ${timeRange}
 
 ## Phase 1 — Context (run these in parallel where possible)
 - get_entity_context for ${entity}
-- ${entityType === 'ip' ? `lookup_ip("${entity}") for GeoIP/ASN` : `lookup_ioc("${entity}") for threat intel`}
+- ${entityType === 'ip' ? `lookup_ip("${entity}") for GeoIP/ASN` : `check threat-intel matches via search (the ioc_matched / ioc_threat_type / ioc_confidence columns are populated at ingest)`}
 - get_prevalence to understand how common this entity is
 - search for all activity involving this entity in the last ${timeRange}
 
@@ -152,7 +152,7 @@ Time range: ${timeRange}
 ## Step 3: ENRICH FINDINGS
 - For any suspicious hits:
   - Check prevalence (get_prevalence) — is this rare?
-  - Cross-reference with IOC feeds (lookup_ioc)
+  - Cross-reference threat intel: filter search results on ioc_matched / ioc_threat_type
   - Check for related alerts and cases
   - Get entity context for involved entities
 

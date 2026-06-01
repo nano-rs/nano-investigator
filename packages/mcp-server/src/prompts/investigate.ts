@@ -51,7 +51,7 @@ Follow this investigation process:
 
 4. **ENRICH** key entities — for each IP, user, or host in the matched events:
    - Call get_entity_context to get risk score, alert history, and activity summary
-   - For external IPs, call lookup_ip for GeoIP and lookup_ioc for threat intel
+   - For external IPs, call lookup_ip for GeoIP; for threat intel, check the ioc_matched / ioc_threat_type / ioc_confidence columns in search results (populated at ingest)
    - For hashes/domains, check prevalence with get_prevalence
 
 5. **SEARCH** for related activity — run 1-2 focused queries to expand context:

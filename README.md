@@ -55,7 +55,7 @@ Or add to your Claude Code settings (`~/.claude/settings.json`):
 > hunt for lateral movement in the last 7 days
 ```
 
-## Tools (68)
+## Tools (67)
 
 | Category | Count | Tools |
 |----------|-------|-------|
@@ -66,7 +66,7 @@ Or add to your Claude Code settings (`~/.claude/settings.json`):
 | **Detections** | 3 | `list_detections` `get_detection` `get_detection_matches` |
 | **Prevalence** | 3 | `get_prevalence` `get_rare_artifacts` `get_new_artifacts` |
 | **Risk** | 3 | `get_risky_entities` `get_risk_overview` `get_entity_risk_timeline` |
-| **Enrichment** | 3 | `get_entity_context` `lookup_ip` `lookup_ioc` |
+| **Enrichment** | 2 | `get_entity_context` `lookup_ip` |
 | **MITRE ATT&CK** | 2 | `get_mitre_technique` `get_mitre_coverage` |
 | **System** | 4 | `get_source_types` `get_org_context` `health_check` `get_audit_trail` |
 | **Parsers** | 19 | `list_log_sources` `get_log_source` `validate_vrl` `test_parse_sample` `test_parse_live` `create_log_source` `update_log_source` `deploy_log_source` `undeploy_log_source` `get_log_source_health` `get_log_source_deployments` `list_source_config_types` `list_source_configs` `create_routing_rule` `check_rule_reachability` `list_parser_repositories` `sync_parser_repository` `list_repository_parsers` `import_parser` |

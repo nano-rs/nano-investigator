@@ -63,7 +63,6 @@ import type {
   RiskEntitiesQuery,
   // Enrichment
   IpLookupResult,
-  IocLookupResult,
   // MITRE
   MitreCoverage,
   // Audit
@@ -454,9 +453,6 @@ export class NanosiemClient {
     return this.request<IpLookupResult>('GET', `/api/enrichment/lookup/${this.encodeId(ip)}`);
   }
 
-  async lookupIoc(value: string): Promise<ApiResponse<IocLookupResult>> {
-    return this.request<IocLookupResult>('GET', `/api/enrichment/ioc/lookup/${encodeURIComponent(value)}`);
-  }
 
   // ==================== MITRE (→ api) ====================
 

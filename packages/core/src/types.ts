@@ -636,19 +636,6 @@ export interface IpLookupResult {
   as_domain?: string;
 }
 
-export interface IocLookupResult {
-  ioc_value: string;
-  found: boolean;
-  ioc_type?: string;
-  confidence_level?: number;
-  threat_type?: string;
-  malware?: string;
-  tags?: string[];
-  first_seen_at?: string;
-  last_seen_at?: string;
-  reference_url?: string;
-}
-
 // ============================================================================
 // MITRE Types
 // ============================================================================

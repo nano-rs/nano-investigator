@@ -55,7 +55,7 @@ Or add to your Claude Code settings (`~/.claude/settings.json`):
 > hunt for lateral movement in the last 7 days
 ```
 
-## Tools (49)
+## Tools (68)
 
 | Category | Count | Tools |
 |----------|-------|-------|
@@ -69,12 +69,16 @@ Or add to your Claude Code settings (`~/.claude/settings.json`):
 | **Enrichment** | 3 | `get_entity_context` `lookup_ip` `lookup_ioc` |
 | **MITRE ATT&CK** | 2 | `get_mitre_technique` `get_mitre_coverage` |
 | **System** | 4 | `get_source_types` `get_org_context` `health_check` `get_audit_trail` |
+| **Parsers** | 19 | `list_log_sources` `get_log_source` `validate_vrl` `test_parse_sample` `test_parse_live` `create_log_source` `update_log_source` `deploy_log_source` `undeploy_log_source` `get_log_source_health` `get_log_source_deployments` `list_source_config_types` `list_source_configs` `create_routing_rule` `check_rule_reachability` `list_parser_repositories` `sync_parser_repository` `list_repository_parsers` `import_parser` |
+
+Parser tools let you build a log-source parser (Vector VRL) end to end from the MCP client — validate, test against a sample, save, deploy, and confirm events flow — without the web UI. Read the `build_parser` prompt and the `nanosiem://reference/vrl-parsers` resource to author VRL that passes nano's validator. (AI parser generation, `@detection`/`@tune`-style, stays in the Enterprise wizards; these tools are open-edition and AI-free.)
 
 ## Resources & Prompts
 
 **Resources** (context loaded into conversation):
 - `nanosiem://schema/udm` -- UDM field catalog
 - `nanosiem://reference/npl` -- nPL query language reference
+- `nanosiem://reference/vrl-parsers` -- VRL parser authoring guide (validator rules, UDM mapping, skeletons)
 - `nanosiem://reference/playbooks/{type}` -- Investigation playbooks
 
 **Prompts** (structured workflows):
@@ -82,6 +86,7 @@ Or add to your Claude Code settings (`~/.claude/settings.json`):
 - `hunt_entity` -- Entity-focused threat hunt
 - `hunt_campaign` -- Proactive campaign hunting
 - `morning_briefing` -- SOC shift handoff
+- `build_parser` -- Guided log-source parser authoring (validate → test → save → deploy → confirm)
 
 ## Project Structure
 

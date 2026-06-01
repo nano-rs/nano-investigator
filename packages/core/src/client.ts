@@ -72,6 +72,31 @@ import type {
   // System
   HealthStatus,
   OrgContext,
+  // Parsers / Log Sources
+  LogSource,
+  NewLogSource,
+  UpdateLogSource,
+  VrlValidationResult,
+  ParserTestResult,
+  TestVrlRequest,
+  TestVrlLiveRequest,
+  LiveTestResult,
+  DeploymentResult,
+  LogSourceDeployment,
+  LogSourceHealth,
+  SourceConfiguration,
+  SourceConfigTypeInfo,
+  ListSourceConfigsParams,
+  RoutingRule,
+  NewRoutingRule,
+  CheckReachabilityRequest,
+  ReachabilityResult,
+  ListParserRepositoriesResponse,
+  RepositoryParser,
+  ListRepositoryParsersParams,
+  ImportParserRequest,
+  ImportParserResponse,
+  ParserSyncStartResponse,
 } from './types.js';
 
 export interface NanosiemClientConfig {
@@ -469,5 +494,135 @@ export class NanosiemClient {
     return this.request<AuditLogResponse>('GET', '/api/audit', undefined, {
       query: params as Record<string, string | number | boolean | undefined>,
     });
+  }
+
+  // ==================== Parsers / Log Sources (→ api) ====================
+  // A log source is a Vector VRL parser bound to a source_type. The authoring
+  // flow is: validate VRL → test against a sample → create (draft) → deploy →
+  // confirm health. Save and deploy are distinct, mirroring the UI.
+
+  async listLogSources(): Promise<ApiResponse<LogSource[]>> {
+    return this.request<LogSource[]>('GET', '/api/log-sources');
+  }
+
+  async getLogSource(id: string): Promise<ApiResponse<LogSource>> {
+    return this.request<LogSource>('GET', `/api/log-sources/${this.encodeId(id)}`);
+  }
+
+  async createLogSource(req: NewLogSource): Promise<ApiResponse<LogSource>> {
+    return this.request<LogSource>('POST', '/api/log-sources', {
+      // source_config is required by the API; default to {} for routed/HTTP.
+      source_config: {},
+      ...req,
+    });
+  }
+
+  async updateLogSource(id: string, req: UpdateLogSource): Promise<ApiResponse<LogSource>> {
+    return this.request<LogSource>('PUT', `/api/log-sources/${this.encodeId(id)}`, req);
+  }
+
+  /** Compile-check arbitrary VRL without saving. */
+  async validateVrl(vrlCode: string): Promise<ApiResponse<VrlValidationResult>> {
+    return this.request<VrlValidationResult>('POST', '/api/log-sources/validate-vrl', {
+      vrl_code: vrlCode,
+    });
+  }
+
+  /** Run VRL against one sample log line and return the parsed output. */
+  async testVrl(req: TestVrlRequest): Promise<ApiResponse<ParserTestResult>> {
+    return this.request<ParserTestResult>('POST', '/api/log-sources/test-vrl', req);
+  }
+
+  /** Test VRL against real recent events for a source_type (post-deploy). */
+  async testVrlLive(req: TestVrlLiveRequest): Promise<ApiResponse<LiveTestResult[]>> {
+    return this.request<LiveTestResult[]>('POST', '/api/log-sources/test-live', req);
+  }
+
+  /**
+   * Deploy a log source to Vector. NOTE: best-effort — the API returns
+   * success even if Vector is unreachable (it logs a warning). Always confirm
+   * with getLogSourceHealth() before reporting the parser as live.
+   */
+  async deployLogSource(id: string): Promise<ApiResponse<DeploymentResult>> {
+    return this.request<DeploymentResult>('POST', `/api/log-sources/${this.encodeId(id)}/deploy`);
+  }
+
+  async undeployLogSource(id: string): Promise<ApiResponse<DeploymentResult>> {
+    return this.request<DeploymentResult>('POST', `/api/log-sources/${this.encodeId(id)}/undeploy`);
+  }
+
+  async getLogSourceHealth(id: string): Promise<ApiResponse<LogSourceHealth>> {
+    return this.request<LogSourceHealth>('GET', `/api/log-sources/${this.encodeId(id)}/health`);
+  }
+
+  async getLogSourceDeployments(id: string): Promise<ApiResponse<LogSourceDeployment[]>> {
+    return this.request<LogSourceDeployment[]>('GET', `/api/log-sources/${this.encodeId(id)}/deployments`);
+  }
+
+  // ==================== Source Configurations (→ api) ====================
+  // Ingress transports (HTTP / Kafka / S3 / Pub-Sub / HEC / Vector) plus the
+  // routing rules that map an incoming event to a parser's source_type.
+
+  async listSourceConfigTypes(): Promise<ApiResponse<SourceConfigTypeInfo[]>> {
+    return this.request<SourceConfigTypeInfo[]>('GET', '/api/source-configurations/types');
+  }
+
+  async listSourceConfigs(params?: ListSourceConfigsParams): Promise<ApiResponse<SourceConfiguration[]>> {
+    return this.request<SourceConfiguration[]>('GET', '/api/source-configurations', undefined, {
+      query: params as Record<string, string | number | boolean | undefined>,
+    });
+  }
+
+  async listRoutingRules(sourceConfigId: string): Promise<ApiResponse<RoutingRule[]>> {
+    return this.request<RoutingRule[]>('GET', `/api/source-configurations/${this.encodeId(sourceConfigId)}/rules`);
+  }
+
+  async createRoutingRule(sourceConfigId: string, req: NewRoutingRule): Promise<ApiResponse<RoutingRule>> {
+    return this.request<RoutingRule>('POST', `/api/source-configurations/${this.encodeId(sourceConfigId)}/rules`, req);
+  }
+
+  /** Check whether a candidate routing rule can actually deliver to a parser. */
+  async checkRoutingRuleReachability(
+    sourceConfigId: string,
+    req: CheckReachabilityRequest
+  ): Promise<ApiResponse<ReachabilityResult>> {
+    return this.request<ReachabilityResult>(
+      'POST',
+      `/api/source-configurations/${this.encodeId(sourceConfigId)}/rules/check-reachability`,
+      req
+    );
+  }
+
+  // ==================== Parser Repositories (→ api) ====================
+  // Browse and import parsers from an upstream library (e.g. nano-rs/parsers).
+
+  async listParserRepositories(): Promise<ApiResponse<ListParserRepositoriesResponse>> {
+    return this.request<ListParserRepositoriesResponse>('GET', '/api/parser-repositories');
+  }
+
+  async syncParserRepository(id: string): Promise<ApiResponse<ParserSyncStartResponse>> {
+    return this.request<ParserSyncStartResponse>('POST', `/api/parser-repositories/${this.encodeId(id)}/sync`);
+  }
+
+  async listRepositoryParsers(
+    id: string,
+    params?: ListRepositoryParsersParams
+  ): Promise<ApiResponse<RepositoryParser[]>> {
+    return this.request<RepositoryParser[]>('GET', `/api/parser-repositories/${this.encodeId(id)}/parsers`, undefined, {
+      query: params as Record<string, string | number | boolean | undefined>,
+    });
+  }
+
+  /** Import a repo parser as a draft log source. `path` may contain slashes. */
+  async importParser(
+    id: string,
+    path: string,
+    req: ImportParserRequest
+  ): Promise<ApiResponse<ImportParserResponse>> {
+    return this.request<ImportParserResponse>(
+      'POST',
+      `/api/parser-repositories/${this.encodeId(id)}/parsers/import/${this.encodeId(path)}`,
+      req
+    );
   }
 }

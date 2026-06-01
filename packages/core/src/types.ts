@@ -729,3 +729,331 @@ export interface OrgContext {
 
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'informational';
 export type Disposition = 'true_positive' | 'false_positive' | 'benign';
+
+// ============================================================================
+// Parsers / Log Sources
+// ============================================================================
+// A "log source" is a Vector VRL parser bound to a source_type. All IDs are
+// typeids serialized as strings (e.g. "logsource_...", "sourceconfig_...").
+// Mirrors nanosiem-core::log_sources / source_configs / parser_repository.
+
+export interface LogSource {
+  id: string;
+  name: string;
+  description?: string | null;
+  /** Identity-resolution namespace, e.g. "default", "aws:123:vpc-abc". */
+  namespace: string;
+  /** IANA timezone applied to timestamps without offset info. */
+  timezone: string;
+  source_type: string;
+  source_config: Record<string, unknown>;
+  parser_vrl: string;
+  output_fields?: Record<string, unknown> | null;
+  extension_vrl?: string | null;
+  extension_enabled?: boolean;
+  category?: string | null;
+  vendor?: string | null;
+  product?: string | null;
+  match_field?: string | null;
+  match_pattern?: string | null;
+  match_values?: string[] | null;
+  validated: boolean;
+  validation_error?: string | null;
+  deployed: boolean;
+  deployed_at?: string | null;
+  enabled: boolean;
+  parser_only?: boolean;
+  /** "log" (default) or "enrichment". */
+  kind: string;
+  source_parser_repository_id?: string | null;
+  source_parser_path?: string | null;
+  source_parser_linked?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NewLogSource {
+  name: string;
+  source_type: string;
+  parser_vrl: string;
+  /** Required by the API. Pass {} for a routed/HTTP source (the common case). */
+  source_config?: Record<string, unknown>;
+  description?: string;
+  /** Defaults server-side to "default". */
+  namespace?: string;
+  /** Defaults server-side to "UTC". */
+  timezone?: string;
+  output_fields?: Record<string, unknown>;
+  category?: string;
+  vendor?: string;
+  product?: string;
+  match_field?: string;
+  match_pattern?: string;
+  match_values?: string[];
+  dispatch_source_config_id?: string;
+}
+
+export interface UpdateLogSource {
+  name?: string;
+  description?: string;
+  namespace?: string;
+  timezone?: string;
+  source_type?: string;
+  source_config?: Record<string, unknown>;
+  parser_vrl?: string;
+  output_fields?: Record<string, unknown>;
+  category?: string;
+  vendor?: string;
+  product?: string;
+  match_field?: string;
+  match_pattern?: string;
+  match_values?: string[];
+  enabled?: boolean;
+  extension_vrl?: string;
+  extension_enabled?: boolean;
+}
+
+export interface VrlDiagnostic {
+  /** "error" | "warn" | "info" */
+  severity: string;
+  line?: number | null;
+  col?: number | null;
+  code?: string | null;
+  message: string;
+  hint?: string | null;
+}
+
+export interface VrlValidationResult {
+  valid: boolean;
+  /** Free-form error strings (legacy). Prefer `diagnostics`. */
+  errors: string[];
+  diagnostics: VrlDiagnostic[];
+}
+
+export interface ParserTestResult {
+  input: string;
+  success: boolean;
+  output?: Record<string, unknown> | null;
+  error?: string | null;
+  /** Number of top-level fields in `output` (0 when output is null). */
+  extracted_field_count: number;
+}
+
+export interface TestVrlRequest {
+  vrl_code: string;
+  sample_log: string;
+  /** Optional parser-extension VRL chained after vrl_code. */
+  extension_vrl?: string;
+}
+
+export interface TestVrlLiveRequest {
+  vrl_code: string;
+  source_type: string;
+  /** Deployed VRL to compare against. */
+  current_vrl?: string;
+  /** Events to test (default 10, max 20). */
+  limit?: number;
+}
+
+export interface LiveTestResult {
+  input: string;
+  new_parse: ParserTestResult;
+  current_parse?: ParserTestResult | null;
+}
+
+export interface DeploymentResult {
+  success: boolean;
+  log_source_id: string;
+  action: string;
+  message: string;
+  validation_result?: VrlValidationResult | null;
+  deployment_id?: string | null;
+}
+
+export interface LogSourceDeployment {
+  id: string;
+  log_source_id: string;
+  action: string;
+  status: string;
+  error_message?: string | null;
+  config_snapshot?: string | null;
+  deployed_at: string;
+}
+
+export interface LogSourceHealth {
+  log_source_id: string;
+  log_source_name: string;
+  total_events: number;
+  events_last_24h: number;
+  events_last_hour: number;
+  avg_events_per_hour: number;
+  last_event_at?: string | null;
+  first_event_at?: string | null;
+  data_freshness_hours?: number | null;
+  /** "increasing" | "stable" | "decreasing" | "unknown" */
+  ingestion_rate_trend: string;
+  /** "healthy" | "stale" | "no_data" | "disabled" | "error" */
+  health_status: string;
+  total_size_bytes: number;
+  avg_event_size_bytes: number;
+  error_rate_24h: number;
+  parse_errors_24h: number;
+}
+
+// --- Source configurations (ingress transports + routing) ---
+
+export interface MatchFieldPreset {
+  label: string;
+  /** VRL path stored as match_field (no leading dot). */
+  path: string;
+  description: string;
+}
+
+export interface SourceConfigTypeInfo {
+  config_type: string;
+  label: string;
+  description: string;
+  requires_credentials: boolean;
+  is_pull_source: boolean;
+  default_match_field: string;
+  match_field_presets: MatchFieldPreset[];
+}
+
+export interface SourceConfiguration {
+  id: string;
+  name: string;
+  description?: string | null;
+  config_type: string;
+  connection_config: Record<string, unknown>;
+  credential_id?: string | null;
+  enabled: boolean;
+  deployed: boolean;
+  deployed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  events_24h?: number | null;
+  bytes_per_day_24h?: number | null;
+  last_event_at?: string | null;
+}
+
+export interface ListSourceConfigsParams {
+  config_type?: string;
+  enabled?: boolean;
+  deployed?: boolean;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface RoutingRule {
+  id: string;
+  source_configuration_id: string;
+  /** Lower = higher priority. */
+  priority: number;
+  match_field: string;
+  /** "exact" | "prefix" | "suffix" | "regex" | "contains" | "default" */
+  match_type: string;
+  match_value?: string | null;
+  target_source_type: string;
+  created_at: string;
+  fires_24h?: number | null;
+  last_fired_at?: string | null;
+}
+
+export interface NewRoutingRule {
+  priority?: number;
+  match_field: string;
+  match_type: string;
+  match_value?: string;
+  target_source_type: string;
+}
+
+export interface CheckReachabilityRequest {
+  target_source_type: string;
+  match_field: string;
+  match_type: string;
+  match_value: string;
+}
+
+export interface ReachabilityResult {
+  reachable: boolean;
+  source_config_enabled: boolean;
+  source_config_deployed: boolean;
+  target_log_source_exists: boolean;
+  broker_reachable?: boolean | null;
+  broker_reachable_details?: string[];
+  warnings: string[];
+}
+
+// --- Parser repositories (importable parser library, e.g. nano-rs/parsers) ---
+
+export interface ParserRepository {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  url: string;
+  branch: string;
+  parsers_path?: string | null;
+  auto_sync_enabled: boolean;
+  sync_interval_hours: number;
+  last_synced_at?: string | null;
+  last_sync_commit?: string | null;
+  last_sync_status?: string | null;
+  last_sync_error?: string | null;
+  parser_count: number;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListParserRepositoriesResponse {
+  repositories: ParserRepository[];
+}
+
+/** A parser cached from an upstream repo. List responses flatten import status. */
+export interface RepositoryParser {
+  id: string;
+  repository_id: string;
+  file_path: string;
+  name?: string | null;
+  display_name?: string | null;
+  description?: string | null;
+  version?: string | null;
+  category?: string | null;
+  vendor?: string | null;
+  product?: string | null;
+  parser_vrl?: string | null;
+  /** "parser" (log) or "enrichment". */
+  kind: string;
+  is_imported?: boolean;
+  linked_log_source_id?: string | null;
+}
+
+export interface ListRepositoryParsersParams {
+  category?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ImportParserRequest {
+  /** "linked" (default) or "forked". */
+  import_type?: string;
+  /** Match value that activates this parser via routing rules (e.g. "apache"). */
+  source_type?: string;
+  /** routed | kafka | aws_s3 | gcp_pubsub | splunk_hec | vector */
+  ingestion_method?: string;
+  dispatch_source_config_id?: string;
+}
+
+export interface ImportParserResponse {
+  log_source_id: string;
+  import_type: string;
+}
+
+export interface ParserSyncStartResponse {
+  repository_id: string;
+  status: string;
+  message: string;
+}

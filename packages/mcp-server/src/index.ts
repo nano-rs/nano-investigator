@@ -79,17 +79,20 @@ import { TOOLS as RISK_TOOLS, handleRiskTool } from './tools/risk.js';
 import { TOOLS as ENRICHMENT_TOOLS, handleEnrichmentTool } from './tools/enrichment.js';
 import { TOOLS as MITRE_TOOLS, handleMitreTool } from './tools/mitre.js';
 import { TOOLS as SYSTEM_TOOLS, handleSystemTool } from './tools/system.js';
+import { TOOLS as PARSERS_TOOLS, handleParsersTool } from './tools/parsers.js';
 
 // Resources
 import { UDM_SCHEMA_RESOURCE, UDM_SCHEMA_CONTENT, UDM_SCHEMA_URI } from './resources/udm-schema.js';
 import { NPL_REFERENCE_RESOURCE, NPL_REFERENCE_CONTENT, NPL_REFERENCE_URI } from './resources/npl-reference.js';
 import { SQL_GUIDE_RESOURCE, SQL_GUIDE_CONTENT, SQL_GUIDE_URI } from './resources/sql-guide.js';
+import { VRL_PARSERS_RESOURCE, VRL_PARSERS_CONTENT, VRL_PARSERS_URI } from './resources/vrl-parsers.js';
 import { getPlaybookResources, getPlaybookContent, PLAYBOOK_URI_PREFIX } from './resources/playbooks.js';
 
 // Prompts
 import { INVESTIGATE_PROMPT, getInvestigatePrompt } from './prompts/investigate.js';
 import { HUNT_ENTITY_PROMPT, HUNT_CAMPAIGN_PROMPT, getHuntEntityPrompt, getHuntCampaignPrompt } from './prompts/hunt.js';
 import { MORNING_BRIEFING_PROMPT, getMorningBriefingPrompt } from './prompts/triage.js';
+import { BUILD_PARSER_PROMPT, getBuildParserPrompt } from './prompts/build-parser.js';
 
 // ==================== Tool Registry ====================
 
@@ -104,6 +107,7 @@ const ALL_TOOLS = [
   ...ENRICHMENT_TOOLS,
   ...MITRE_TOOLS,
   ...SYSTEM_TOOLS,
+  ...PARSERS_TOOLS,
 ];
 
 // Map tool names to their category handler
@@ -117,6 +121,7 @@ const RISK_TOOL_NAMES = new Set(RISK_TOOLS.map((t) => t.name));
 const ENRICHMENT_TOOL_NAMES = new Set(ENRICHMENT_TOOLS.map((t) => t.name));
 const MITRE_TOOL_NAMES = new Set(MITRE_TOOLS.map((t) => t.name));
 const SYSTEM_TOOL_NAMES = new Set(SYSTEM_TOOLS.map((t) => t.name));
+const PARSERS_TOOL_NAMES = new Set(PARSERS_TOOLS.map((t) => t.name));
 
 // ==================== Client Setup ====================
 
@@ -181,6 +186,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (ENRICHMENT_TOOL_NAMES.has(name)) return handleEnrichmentTool(name, toolArgs, client);
   if (MITRE_TOOL_NAMES.has(name)) return handleMitreTool(name, toolArgs, client);
   if (SYSTEM_TOOL_NAMES.has(name)) return handleSystemTool(name, toolArgs, client);
+  if (PARSERS_TOOL_NAMES.has(name)) return handleParsersTool(name, toolArgs, client);
 
   return {
     content: [{ type: 'text', text: `Unknown tool: ${name}` }],
@@ -191,7 +197,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // ==================== Resource Handlers ====================
 
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-  resources: [SQL_GUIDE_RESOURCE, UDM_SCHEMA_RESOURCE, NPL_REFERENCE_RESOURCE, ...getPlaybookResources()],
+  resources: [
+    SQL_GUIDE_RESOURCE,
+    UDM_SCHEMA_RESOURCE,
+    NPL_REFERENCE_RESOURCE,
+    VRL_PARSERS_RESOURCE,
+    ...getPlaybookResources(),
+  ],
 }));
 
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
@@ -215,6 +227,12 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     };
   }
 
+  if (uri === VRL_PARSERS_URI) {
+    return {
+      contents: [{ uri, mimeType: 'text/markdown', text: VRL_PARSERS_CONTENT }],
+    };
+  }
+
   if (uri.startsWith(PLAYBOOK_URI_PREFIX + '/')) {
     const type = uri.slice(PLAYBOOK_URI_PREFIX.length + 1);
     const content = getPlaybookContent(type);
@@ -230,7 +248,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
 
 // ==================== Prompt Handlers ====================
 
-const ALL_PROMPTS = [INVESTIGATE_PROMPT, HUNT_ENTITY_PROMPT, HUNT_CAMPAIGN_PROMPT, MORNING_BRIEFING_PROMPT];
+const ALL_PROMPTS = [INVESTIGATE_PROMPT, HUNT_ENTITY_PROMPT, HUNT_CAMPAIGN_PROMPT, MORNING_BRIEFING_PROMPT, BUILD_PARSER_PROMPT];
 
 server.setRequestHandler(ListPromptsRequestSchema, async () => ({
   prompts: ALL_PROMPTS,
@@ -249,6 +267,8 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
       return getHuntCampaignPrompt(promptArgs);
     case 'morning_briefing':
       return getMorningBriefingPrompt(promptArgs);
+    case 'build_parser':
+      return getBuildParserPrompt(promptArgs);
     default:
       throw new Error(`Unknown prompt: ${name}`);
   }
@@ -262,7 +282,7 @@ async function main(): Promise<void> {
 
   console.error('nano-investigator MCP server started');
   console.error(`Tools: ${ALL_TOOLS.length}`);
-  console.error(`Resources: ${3 + getPlaybookResources().length}`);
+  console.error(`Resources: ${4 + getPlaybookResources().length}`);
   console.error(`Prompts: ${ALL_PROMPTS.length}`);
   console.error('');
   console.error('Required environment variables:');

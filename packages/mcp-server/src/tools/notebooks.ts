@@ -282,7 +282,7 @@ export async function handleNotebooksTool(
       if (args.visibility !== undefined) req.visibility = args.visibility;
 
       const res = await client.createNotebook(
-        req as Parameters<typeof client.createNotebook>[0],
+        req as unknown as Parameters<typeof client.createNotebook>[0],
       );
       if (!res.success) return err(`Failed to create notebook: ${res.error?.message}`);
       return ok(res.data);
@@ -304,7 +304,7 @@ export async function handleNotebooksTool(
 
       const res = await client.addNotebookEntry(
         notebookId,
-        req as Parameters<typeof client.addNotebookEntry>[1],
+        req as unknown as Parameters<typeof client.addNotebookEntry>[1],
       );
       if (!res.success) return err(`Failed to add notebook entry: ${res.error?.message}`);
       return ok(res.data);
@@ -326,7 +326,7 @@ export async function handleNotebooksTool(
 
       const res = await client.addNotebookReference(
         notebookId,
-        req as Parameters<typeof client.addNotebookReference>[1],
+        req as unknown as Parameters<typeof client.addNotebookReference>[1],
       );
       if (!res.success)
         return err(`Failed to add notebook reference: ${res.error?.message}`);
@@ -361,7 +361,7 @@ export async function handleNotebooksTool(
 
       const res = await client.shareNotebook(
         id,
-        req as Parameters<typeof client.shareNotebook>[1],
+        req as unknown as Parameters<typeof client.shareNotebook>[1],
       );
       if (!res.success) return err(`Failed to share notebook: ${res.error?.message}`);
       return ok(res.data);

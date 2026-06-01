@@ -1,4 +1,4 @@
-import type { NanosiemClient } from '@nano-investigator/core';
+import type { NanosiemClient, CaseStatus } from '@nano-investigator/core';
 import { type ToolResult, ok, err } from './utils.js';
 
 export const TOOLS = [
@@ -292,7 +292,7 @@ export async function handleCasesTool(
   switch (name) {
     case 'list_cases': {
       const res = await client.listCases({
-        status: args.status as string[] | undefined,
+        status: args.status as CaseStatus[] | undefined,
         severity: args.severity as string[] | undefined,
         assigned_to: args.assigned_to as string | undefined,
         search: args.search as string | undefined,
@@ -350,8 +350,8 @@ export async function handleCasesTool(
             if (!refsRes.success) nbErrors.push(`References: ${refsRes.error?.message}`);
             return {
               notebook: nb,
-              entries: entriesRes.success ? entriesRes.data : [],
-              references: refsRes.success ? refsRes.data : [],
+              entries: entriesRes.success && entriesRes.data ? entriesRes.data : [],
+              references: refsRes.success && refsRes.data ? refsRes.data : [],
               ...(nbErrors.length > 0 ? { errors: nbErrors } : {}),
             };
           })

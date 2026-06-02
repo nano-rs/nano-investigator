@@ -2,6 +2,8 @@
 
 MCP server that turns Claude Code (or any MCP client) into an interactive SOC analyst workstation for [nano](https://nanosiem.io). Search logs, triage alerts, investigate cases, and hunt threats through natural language.
 
+![Investigating a multi-host intrusion with nano-investigator — correlating cases, confirming the attack chain, and surfacing IOCs](docs/images/investigation-example.png)
+
 ## Quick Start
 
 ```bash

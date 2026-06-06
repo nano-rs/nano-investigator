@@ -75,11 +75,27 @@ Create an API key in nano with the following scopes. The server only needs view 
 | `notebooks:create` | Create investigation notebooks |
 | `notebooks:edit` | Add entries/references, link to cases, share, update |
 
+### Optional — log source & parser management
+
+Add these only if you want the assistant to author and deploy log-source parsers — the `list_log_sources` / `create_log_source` / `update_log_source` / `deploy_log_source` / `import_parser` / routing-rule tools. They control what nano ingests and how it's parsed, so grant them only when you want that capability.
+
+| Permission | What it enables |
+|------------|-----------------|
+| `log_sources:view` | List/inspect log sources, deployments and health; validate and test VRL |
+| `log_sources:create` | Save new parsers as drafts |
+| `log_sources:edit` | Update existing parsers, toggle enabled |
+| `log_sources:deploy` | Deploy / undeploy parsers to Vector |
+| `source_configs:view` | List source configurations and routing rules, check rule reachability |
+| `source_configs:edit` | Create and edit routing rules |
+| `parser_repositories:view` | Browse parser repositories and their parsers |
+| `parser_repositories:sync` | Refresh a parser repository |
+| `parser_repositories:import` | Import a prebuilt parser as a draft |
+
 ### Not needed
 
-`detections:edit`, `settings:*`, `users:*`, `admin:*`, `log_sources:*`, `dashboards:*`
+`detections:edit`, `settings:*`, `users:*`, `admin:*`, `dashboards:*`, `log_sources:delete`, `source_configs:create`, `source_configs:delete`, `parser_repositories:manage`
 
-Even if the key has broader permissions, the MCP server self-restricts to the tools listed above — it never exposes destructive operations like deleting cases or alerts.
+Even if the key has broader permissions, the MCP server self-restricts to the tools listed above — it never exposes destructive operations like deleting cases, alerts, or log sources.
 
 ## Verify it works
 

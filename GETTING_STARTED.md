@@ -56,6 +56,8 @@ Create an API key in nano with the following scopes. The server only needs view 
 | `search:view` | View saved searches |
 | `search:execute` | Execute nPL queries, field stats, asset lookups |
 | `search:save` | Save searches, create shared search links |
+| `log_sources:view` | Search/field discovery enumerates configured log sources and source types |
+| `lookup:view` | Execute nPL searches that reference lookup tables (the `lookup` command) |
 | `detections:view` | View detection rules, matches, stats |
 | `alerts:view` | List and view alerts |
 | `cases:view` | List and view cases, wall entries, related cases |
@@ -77,11 +79,10 @@ Create an API key in nano with the following scopes. The server only needs view 
 
 ### Optional — log source & parser management
 
-Add these only if you want the assistant to author and deploy log-source parsers — the `list_log_sources` / `create_log_source` / `update_log_source` / `deploy_log_source` / `import_parser` / routing-rule tools. They control what nano ingests and how it's parsed, so grant them only when you want that capability.
+Add these only if you want the assistant to author and deploy log-source parsers — the `list_log_sources` / `create_log_source` / `update_log_source` / `deploy_log_source` / `import_parser` / routing-rule tools. They control what nano ingests and how it's parsed, so grant them only when you want that capability. (Read access — `log_sources:view` — is already in the required view set above.)
 
 | Permission | What it enables |
 |------------|-----------------|
-| `log_sources:view` | List/inspect log sources, deployments and health; validate and test VRL |
 | `log_sources:create` | Save new parsers as drafts |
 | `log_sources:edit` | Update existing parsers, toggle enabled |
 | `log_sources:deploy` | Deploy / undeploy parsers to Vector |

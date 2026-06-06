@@ -52,6 +52,14 @@
 4. **Present** — Summarize findings at each checkpoint. Don't silently investigate.
 5. **Recommend** — FP/TP assessment, immediate actions, follow-ups.
 
+### Investigation Rigor (apply on every case review — see `skills/`, activate by copying into `.claude/skills/`)
+
+These checks are not optional add-ons; they are part of Scope and Recommend. Reach for the matching skill:
+
+- **Don't trust the case window** (`case-temporal-scoping`) — alert timestamps mark when detections *fired*, not when activity began or whether it's ongoing. Always sweep the **lead-up** (earlier-stage activity the rules missed) and the **follow-up days through now** (recurrence / spread). Pull the full process tree, not just the alert's matched events.
+- **Baseline before calling anything anomalous** (`entity-baseline-comparison`) — "suspicious" is a comparison. Query the entity's pre-incident history before describing behavior as new/rare/unusual. Note: pre-existing behavior may mean the campaign started earlier than the case, not that it's benign.
+- **Rule out normal business before a verdict** (`benign-business-ruleout`) — a TP call requires considering and rejecting the legitimate explanation (payload semantics, method diversity, fan-out, cadence, role, corroboration). State caveats and evidence gaps; no unsupported certainty.
+
 ## Resuming Existing Cases
 
 When an analyst asks to review, continue, or investigate an existing case (e.g. "investigate case 1234", "let's look at case 42"):

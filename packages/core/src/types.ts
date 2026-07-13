@@ -1175,6 +1175,24 @@ export interface Dashboard {
   updated_at: string;
 }
 
+/**
+ * What `GET /api/dashboards` actually returns — a SUMMARY, not a Dashboard.
+ * It carries `panel_count` and has no `panels`/`layout` at all, so treating the
+ * list response as `Dashboard[]` reports every dashboard as having zero panels.
+ */
+export interface DashboardSummary {
+  id: string;
+  name: string;
+  description?: string;
+  panel_count: number;
+  owner_id?: string;
+  owner_name?: string;
+  visibility: DashboardVisibility;
+  shared_groups?: unknown[];
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CreateDashboardRequest {
   name: string;
   description?: string;

@@ -1,30 +1,43 @@
 import type { NanosiemClient } from '@nano-investigator/core';
 import { type ToolResult, ok, err } from './utils.js';
+import { parseRelativeTime } from './search.js';
 
 /**
  * Dashboards: build one, prove it works, save it.
  *
- * The load-bearing fact about this API: `panels` and `layout` are opaque JSON
- * columns server-side, and NOTHING validates their shape on write. A malformed
- * panel saves with a cheerful 200 and then breaks at every render, in the web app
- * and the desktop app alike. So the honest authoring loop is:
+ * WHAT THE SERVER ALREADY CHECKS (DSH14/DSH43, `handlers/dashboards/export.rs`):
+ * name and description length, panel count, panel ids present and unique, panel
+ * title/query length, the visualization-type and query-mode whitelists, and that
+ * `layout.items` is an array of objects carrying i/x/y/w/h. Those come back as a
+ * 400, so they are not this module's job — though it checks them anyway, because
+ * catching them locally costs nothing and saves a round trip.
+ *
+ * WHAT NOTHING CHECKS — and what actually breaks a dashboard:
+ *   - a layout item whose `i` matches no panel (the panel renders nowhere)
+ *   - a panel with no layout item (same)
+ *   - panels that overlap, or run off the 12-column grid
+ *   - a query the panel-query endpoint will reject at RENDER time (`| tree` et al)
+ *   - a $variable nothing declares, so the panel silently returns nothing
+ *   - a SQL panel with no time filter, which quietly scans all retention
+ *   - autoRun off, so the dashboard opens empty
+ * Every one of those saves with a cheerful 200 and disappoints later. That is
+ * what `validate_dashboard` is for, and why the authoring loop is:
  *
  *   get_dashboard_schema  → learn the contract (don't guess it)
- *   validate_dashboard    → catch the structural mistakes, locally, for free
+ *   validate_dashboard    → catch what the server won't, locally, for free
  *   dashboard_panel_query → prove each panel actually returns rows
  *   create/update         → only then persist
- *
- * Skipping the middle two is how you ship a dashboard of empty boxes.
  */
 
 /**
- * The viz types that can actually be authored.
+ * The viz types an agent should AUTHOR.
  *
- * `tree` and `flow` are in the web app's enum but the backend REJECTS the
- * commands they need with HTTP 400 (`validate_panel_query_commands`), and
- * `obs_metric` is fed by the metrics endpoint rather than the panel-query path.
- * Offering any of the three would let an agent author a panel that is broken by
- * construction.
+ * The backend accepts three more — `tree`, `flow`, `obs_metric` — and they exist
+ * on real dashboards, so they are tolerated on panels that already exist (see
+ * `SERVER_VIZ`). But they must not be authored: the backend rejects the commands
+ * `tree`/`flow` need at panel-query time, and `obs_metric` is fed by the metrics
+ * endpoint rather than the panel-query path. Authoring one produces a panel that
+ * is broken by construction.
  */
 const AUTHORABLE_VIZ = [
   'bar',
@@ -38,6 +51,9 @@ const AUTHORABLE_VIZ = [
   'transaction',
 ] as const;
 
+/** Everything the backend's whitelist accepts — what an EXISTING panel may be. */
+const SERVER_VIZ = [...AUTHORABLE_VIZ, 'tree', 'flow', 'obs_metric'];
+
 /**
  * Commands the panel-query endpoint hard-rejects (HTTP 400). A panel containing
  * one of these fails on every refresh, forever.
@@ -48,6 +64,41 @@ const FORBIDDEN_COMMANDS = ['tree', 'asset', 'cloud', 'ai', 'lateral', 'funnel']
 const GRID_COLUMNS = 12;
 const MIN_PANEL_W = 2;
 const MIN_PANEL_H = 2;
+
+/** The server's own limits (`handlers/dashboards/types.rs`). Exceeding one is a 400. */
+const MAX_NAME_LENGTH = 200;
+const MAX_DESCRIPTION_LENGTH = 2000;
+const MAX_PANELS = 50;
+const MAX_QUERY_LENGTH = 10_000;
+const MAX_PANEL_TITLE_LENGTH = 200;
+
+const VISIBILITIES = ['public', 'group', 'private'];
+
+/**
+ * Strip the parts of a query where a `|` is DATA, not a pipe: quoted strings and
+ * regex literals. The backend applies its command blocklist to the parsed AST, so
+ * a raw text scan over the whole query rejects things it runs perfectly well —
+ * `process_name=/(chrome|ai)/` and `message="failed|tree"` are both legitimate,
+ * and both look like a forbidden command to a naive scan.
+ */
+function stripLiterals(query: string): string {
+  return query
+    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+    .replace(/'(?:[^'\\]|\\.)*'/g, "''")
+    .replace(/\/(?:[^/\\\n]|\\.)*\//g, '//');
+}
+
+/**
+ * The commands a piped query actually invokes: the first token after each top-level
+ * `|`, once the literals are gone.
+ */
+function pipedCommands(query: string): string[] {
+  return stripLiterals(query)
+    .split('|')
+    .slice(1)
+    .map((segment) => segment.trim().split(/[\s(]/, 1)[0].toLowerCase())
+    .filter(Boolean);
+}
 
 /** Sizes that make each viz readable, from the web app's own `getIdealSize`. */
 const IDEAL_SIZE: Record<string, { w: number; h: number }> = {
@@ -72,10 +123,26 @@ const IDEAL_SIZE: Record<string, { w: number; h: number }> = {
  */
 const SCHEMA_GUIDE = {
   overview:
-    'A dashboard is { name, description?, visibility?, layout, panels[] }. `panels` and ' +
-    '`layout` are opaque JSON to the server — nothing validates them on write, so a ' +
-    'malformed panel saves fine and breaks at render. Always run validate_dashboard, then ' +
+    'A dashboard is { name, description?, visibility?, layout, panels[] }. The server checks ' +
+    'field limits and basic structure (name/title/query length, panel count, unique ids, the ' +
+    'visualization whitelist, layout.items shape) and 400s on those. It does NOT check the ' +
+    'things that make a dashboard actually WORK: that every layout item points at a real panel, ' +
+    'that panels fit the grid and do not overlap, or that a query is one the panel-query endpoint ' +
+    'will run. Those save cleanly and disappoint later — so run validate_dashboard, then ' +
     'dashboard_panel_query on each panel, BEFORE create_dashboard.',
+
+  visibilityDefault:
+    'IMPORTANT: `visibility` defaults to "public" server-side — visible to every user in the ' +
+    'tenant. Set it explicitly. Use "private" unless the user asked for a shared dashboard.',
+
+  serverLimits: {
+    name: `<= ${MAX_NAME_LENGTH} chars`,
+    description: `<= ${MAX_DESCRIPTION_LENGTH} chars`,
+    panels: `<= ${MAX_PANELS}`,
+    panelTitle: `<= ${MAX_PANEL_TITLE_LENGTH} chars`,
+    panelQuery: `<= ${MAX_QUERY_LENGTH} chars`,
+    panelIds: 'must be present, non-empty, and unique',
+  },
 
   casing:
     'Dashboard-level fields are snake_case (refresh_interval, created_at). Everything ' +
@@ -191,6 +258,10 @@ interface Issue {
   message: string;
 }
 
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 /**
  * Check a proposed dashboard against every invariant the renderer and the
  * backend actually enforce. Pure — no API call, so it costs nothing and can be
@@ -199,30 +270,80 @@ interface Issue {
  * Errors are things that WILL break. Warnings are things that will merely
  * disappoint (an empty dashboard, a query that scans all time).
  */
-export function validateDashboard(dashboard: unknown): {
+export function validateDashboard(
+  dashboard: unknown,
+  options: {
+    /**
+     * Panels that ALREADY EXIST on the dashboard being edited. They are held to
+     * the server's whitelist rather than the stricter authoring one — otherwise
+     * an agent could never edit a dashboard that happens to contain a `tree` or
+     * `obs_metric` panel it didn't create, which is most real dashboards.
+     */
+    existingPanelIds?: Set<string>;
+  } = {}
+): {
   valid: boolean;
   errors: Issue[];
   warnings: Issue[];
 } {
   const errors: Issue[] = [];
   const warnings: Issue[] = [];
+  const existing = options.existingPanelIds ?? new Set<string>();
 
-  if (typeof dashboard !== 'object' || dashboard === null) {
+  if (typeof dashboard !== 'object' || dashboard === null || Array.isArray(dashboard)) {
     return { valid: false, errors: [{ path: '', message: 'Dashboard must be an object.' }], warnings };
   }
   const board = dashboard as Record<string, unknown>;
 
   if (typeof board.name !== 'string' || !board.name.trim()) {
     errors.push({ path: 'name', message: 'A dashboard needs a name.' });
+  } else if (board.name.length > MAX_NAME_LENGTH) {
+    errors.push({
+      path: 'name',
+      message: `Name is ${board.name.length} chars; the server rejects anything over ${MAX_NAME_LENGTH}.`,
+    });
   }
 
-  const panels = Array.isArray(board.panels) ? (board.panels as Record<string, unknown>[]) : null;
+  if (
+    typeof board.description === 'string' &&
+    board.description.length > MAX_DESCRIPTION_LENGTH
+  ) {
+    errors.push({
+      path: 'description',
+      message: `Description is ${board.description.length} chars; the limit is ${MAX_DESCRIPTION_LENGTH}.`,
+    });
+  }
+
+  if (board.visibility === undefined) {
+    // The server defaults to "public" — i.e. visible to every user in the tenant.
+    // An agent that simply omits it has published the dashboard without meaning to.
+    warnings.push({
+      path: 'visibility',
+      message:
+        'visibility is not set, and the server defaults to "public" — every user will see this ' +
+        'dashboard. Set it explicitly ("private" | "group" | "public").',
+    });
+  } else if (typeof board.visibility !== 'string' || !VISIBILITIES.includes(board.visibility)) {
+    errors.push({
+      path: 'visibility',
+      message: `visibility must be one of: ${VISIBILITIES.join(', ')}.`,
+    });
+  }
+
+  const panels = Array.isArray(board.panels) ? (board.panels as unknown[]) : null;
   if (!panels) {
     errors.push({ path: 'panels', message: 'panels must be an array.' });
+  } else if (panels.length > MAX_PANELS) {
+    errors.push({
+      path: 'panels',
+      message: `${panels.length} panels; the server rejects more than ${MAX_PANELS}.`,
+    });
   }
 
   const layout = (
-    typeof board.layout === 'object' && board.layout !== null ? board.layout : null
+    typeof board.layout === 'object' && board.layout !== null && !Array.isArray(board.layout)
+      ? board.layout
+      : null
   ) as Record<string, unknown> | null;
   if (!layout) {
     errors.push({ path: 'layout', message: 'layout must be an object.' });
@@ -234,16 +355,36 @@ export function validateDashboard(dashboard: unknown): {
     warnings.push({ path: 'panels', message: 'The dashboard has no panels — it will open empty.' });
   }
 
+  if (layout.variables !== undefined && !Array.isArray(layout.variables)) {
+    errors.push({
+      path: 'layout.variables',
+      message: 'layout.variables must be an array — the server rejects anything else.',
+    });
+  }
+
   const declaredVariables = new Set(
-    (Array.isArray(layout.variables) ? (layout.variables as Record<string, unknown>[]) : [])
-      .map((variable) => variable.name)
+    (Array.isArray(layout.variables) ? (layout.variables as unknown[]) : [])
+      .map((variable) =>
+        typeof variable === 'object' && variable !== null
+          ? (variable as Record<string, unknown>).name
+          : undefined
+      )
       .filter((name): name is string => typeof name === 'string')
   );
 
   // --- panels -------------------------------------------------------------
   const ids = new Set<string>();
-  panels.forEach((panel, index) => {
+  panels.forEach((entry, index) => {
     const at = `panels[${index}]`;
+
+    // An LLM-authored array can contain null. This function's entire job is to
+    // survive malformed input and describe it — throwing on it would escape the
+    // handler and return a JSON-RPC internal error instead of a fixable message.
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      errors.push({ path: at, message: 'Each panel must be an object.' });
+      return;
+    }
+    const panel = entry as Record<string, unknown>;
     const id = panel.id;
 
     if (typeof id !== 'string' || !id.trim()) {
@@ -256,16 +397,27 @@ export function validateDashboard(dashboard: unknown): {
 
     if (typeof panel.title !== 'string' || !panel.title.trim()) {
       errors.push({ path: `${at}.title`, message: 'Every panel needs a title.' });
+    } else if (panel.title.length > MAX_PANEL_TITLE_LENGTH) {
+      errors.push({
+        path: `${at}.title`,
+        message: `Title is ${panel.title.length} chars; the limit is ${MAX_PANEL_TITLE_LENGTH}.`,
+      });
     }
 
+    // A panel that was already on the dashboard is held to the SERVER's whitelist;
+    // only a panel being authored now is held to the narrower authorable set.
+    const preexisting = typeof id === 'string' && existing.has(id);
+    const allowed = preexisting ? SERVER_VIZ : (AUTHORABLE_VIZ as readonly string[]);
     const viz = panel.visualizationType;
-    if (typeof viz !== 'string' || !(AUTHORABLE_VIZ as readonly string[]).includes(viz)) {
+
+    if (typeof viz !== 'string' || !allowed.includes(viz)) {
       errors.push({
         path: `${at}.visualizationType`,
-        message:
-          `"${String(viz)}" is not an authorable visualization. Use one of: ` +
-          `${AUTHORABLE_VIZ.join(', ')}. (tree and flow are blocked by the backend; ` +
-          `obs_metric uses a different data path.)`,
+        message: preexisting
+          ? `"${String(viz)}" is not a visualization this platform accepts.`
+          : `"${String(viz)}" is not an authorable visualization. Use one of: ` +
+            `${AUTHORABLE_VIZ.join(', ')}. (tree and flow need commands the backend rejects; ` +
+            `obs_metric is fed by the metrics endpoint, not the panel query.)`,
       });
     }
 
@@ -295,21 +447,21 @@ export function validateDashboard(dashboard: unknown): {
     }
 
     const query = panel.query;
+
+    // An `obs_metric` panel carries an EMPTY query by design — its data comes from
+    // the metrics endpoint via `metricConfig`, not the panel-query path. Demanding
+    // a query from one is how you make an existing dashboard un-editable.
+    if (viz === 'obs_metric') return;
+
     if (typeof query !== 'string' || !query.trim()) {
       errors.push({ path: `${at}.query`, message: 'Every panel needs a query.' });
       return;
     }
-
-    // The command blocklist. These don't degrade — they 400.
-    for (const command of FORBIDDEN_COMMANDS) {
-      if (new RegExp(`\\|\\s*${command}\\b`, 'i').test(query)) {
-        errors.push({
-          path: `${at}.query`,
-          message:
-            `"| ${command}" is rejected by the panel-query endpoint (HTTP 400). ` +
-            `This panel would fail on every refresh.`,
-        });
-      }
+    if (query.length > MAX_QUERY_LENGTH) {
+      errors.push({
+        path: `${at}.query`,
+        message: `Query is ${query.length} chars; the server rejects anything over ${MAX_QUERY_LENGTH}.`,
+      });
     }
 
     if (mode === 'sql') {
@@ -321,7 +473,29 @@ export function validateDashboard(dashboard: unknown): {
             'scans ALL retention.',
         });
       }
-    } else if (!/\|\s*(stats|timechart|top|rare|chart)\b/i.test(query)) {
+      // The command blocklist below is a PIPED-query rule — the backend only
+      // applies it in the piped arm. Scanning SQL for `| asset` would reject
+      // `match(msg, 'a|asset')`, which runs fine.
+      return;
+    }
+
+    // The command blocklist. These don't degrade — they 400 at render time. Checked
+    // against the commands the query actually invokes, not a text scan: a `|` inside
+    // a quoted string or a regex is data (`process_name=/(chrome|ai)/` is legitimate).
+    const invoked = pipedCommands(query);
+    for (const command of FORBIDDEN_COMMANDS) {
+      if (invoked.includes(command)) {
+        errors.push({
+          path: `${at}.query`,
+          message:
+            `"| ${command}" is rejected by the panel-query endpoint (HTTP 400). ` +
+            `This panel would fail on every refresh.`,
+        });
+      }
+    }
+
+    const AGGREGATES = ['stats', 'timechart', 'top', 'rare', 'chart'];
+    if (!invoked.some((command) => AGGREGATES.includes(command))) {
       warnings.push({
         path: `${at}.query`,
         message:
@@ -331,8 +505,9 @@ export function validateDashboard(dashboard: unknown): {
     }
 
     // $vars that no variable declares are left LITERAL in the query — a silent
-    // "no results" rather than an error.
-    const referenced = query.match(/\$([A-Za-z_]\w*)/g) ?? [];
+    // "no results" rather than an error. Checked outside quoted literals, since a
+    // $token inside a string (e.g. "$RECYCLE.BIN") is never substituted either.
+    const referenced = stripLiterals(query).match(/\$([A-Za-z_]\w*)/g) ?? [];
     for (const token of referenced) {
       const name = token.slice(1);
       if (name.startsWith('__')) continue; // $__timeFilter and friends
@@ -367,8 +542,14 @@ export function validateDashboard(dashboard: unknown): {
   const placed = new Set<string>();
   const boxes: { i: string; x: number; y: number; w: number; h: number }[] = [];
 
-  items.forEach((item, index) => {
+  items.forEach((entry, index) => {
     const at = `layout.items[${index}]`;
+
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      errors.push({ path: at, message: 'Each layout item must be an object.' });
+      return;
+    }
+    const item = entry as Record<string, unknown>;
     const i = item.i;
 
     if (typeof i !== 'string' || !ids.has(i)) {
@@ -384,13 +565,18 @@ export function validateDashboard(dashboard: unknown): {
     }
     placed.add(i);
 
-    const x = Number(item.x);
-    const y = Number(item.y);
-    const w = Number(item.w);
-    const h = Number(item.h);
+    // Real numbers, not coercible ones. `Number("6")` is 6, but the STRING is what
+    // gets persisted — the server only checks the keys are present — and
+    // react-grid-layout then evaluates `x + w` as string concatenation.
+    const { x, y, w, h } = item;
 
-    if (![x, y, w, h].every(Number.isFinite)) {
-      errors.push({ path: at, message: 'x, y, w and h must all be numbers.' });
+    if (!isNumber(x) || !isNumber(y) || !isNumber(w) || !isNumber(h)) {
+      errors.push({
+        path: at,
+        message:
+          'x, y, w and h must be numbers, not strings. The server stores what you send, and the ' +
+          'grid then does arithmetic on it.',
+      });
       return;
     }
     if (w < MIN_PANEL_W || h < MIN_PANEL_H) {
@@ -482,15 +668,25 @@ export const TOOLS = [
       'Run ONE panel\'s query and return its rows — the way to PROVE a panel works before you save ' +
       'it. A dashboard whose panels were never run is a dashboard of empty boxes.\n' +
       '\n' +
-      'Use the same query, query_mode and time range the panel will use. Substitute any $variables ' +
-      'yourself first (send the resolved query). Results are capped at 10,000 rows.\n' +
+      'Use the same query, query_mode and time range the panel will use. If the query references ' +
+      '$variables, pass them in `variables` and let the SERVER substitute them — hand-substituting ' +
+      'does not reproduce the platform\'s semantics (an empty value removes its whole clause; a ' +
+      'bare $var becomes *; $tokens inside quoted strings are never touched), so a hand-resolved ' +
+      'query can return rows here and render differently in the app.\n' +
       '\n' +
-      '`column_order` in the response tells the renderer which columns are group-bys and which are ' +
-      'aggregates — if it comes back, the panel will chart correctly.',
+      'Results are capped at 10,000 rows. `column_order` in the response tells the renderer which ' +
+      'columns are group-bys and which are aggregates — if it comes back, the panel will chart ' +
+      'correctly.',
     inputSchema: {
       type: 'object' as const,
       properties: {
-        query: { type: 'string', description: 'The panel query, with $variables already resolved.' },
+        query: { type: 'string', description: 'The panel query, exactly as the panel will hold it.' },
+        variables: {
+          type: 'object',
+          description:
+            'Values for any $variables the query references, e.g. { "host": "web-01" }. Substituted ' +
+            'server-side, with the same semantics the dashboard uses.',
+        },
         query_mode: {
           type: 'string',
           enum: ['piped', 'sql'],
@@ -507,6 +703,20 @@ export const TOOLS = [
         bypass_cache: {
           type: 'boolean',
           description: 'Skip the server-side result cache and recompute live.',
+        },
+        panel: {
+          type: 'object',
+          description:
+            'The panel this query belongs to: { id?, title?, visualizationType? }. ALWAYS pass ' +
+            'this when you are building a dashboard. The nano desktop app watches your tool calls ' +
+            'and draws each panel the moment you validate it, so the analyst watches the dashboard ' +
+            'assemble itself instead of staring at a spinner. Without it the app knows the rows ' +
+            'but not how to draw them.',
+          properties: {
+            id: { type: 'string' },
+            title: { type: 'string' },
+            visualizationType: { type: 'string', enum: [...AUTHORABLE_VIZ] },
+          },
         },
       },
       required: ['query', 'query_mode', 'start_time'],
@@ -595,23 +805,18 @@ export const TOOLS = [
   },
 ];
 
-/** Relative times, matching the search tools (`-24h`, `-7d`, `now`, ISO 8601). */
+/**
+ * Relative times (`-24h`, `-7d`), `now`, or ISO 8601 — the same grammar the search
+ * tools accept, reused rather than reimplemented.
+ *
+ * The one addition: a DATE-ONLY string. `parseRelativeTime` passes "2026-07-12"
+ * straight through, but the API deserializes into a `DateTime<Utc>` and answers a
+ * bare 422 — so widen it to a real instant here instead of letting the agent hit
+ * an opaque error.
+ */
 function resolveTime(time: string): string {
-  if (time === 'now') return new Date().toISOString();
-  const match = time.match(/^-(\d+)(m|h|d|w)$/);
-  if (match) {
-    const value = parseInt(match[1], 10);
-    const now = new Date();
-    if (match[2] === 'm') now.setMinutes(now.getMinutes() - value);
-    if (match[2] === 'h') now.setHours(now.getHours() - value);
-    if (match[2] === 'd') now.setDate(now.getDate() - value);
-    if (match[2] === 'w') now.setDate(now.getDate() - value * 7);
-    return now.toISOString();
-  }
-  if (/^\d{4}-\d{2}-\d{2}/.test(time)) return time;
-  throw new Error(
-    `Invalid time format: "${time}". Use relative ("-1h", "-7d"), "now", or ISO 8601.`
-  );
+  if (/^\d{4}-\d{2}-\d{2}$/.test(time)) return `${time}T00:00:00Z`;
+  return parseRelativeTime(time);
 }
 
 export async function handleDashboardsTool(
@@ -656,6 +861,9 @@ export async function handleDashboardsTool(
         query,
         query_mode: queryMode,
         time_range: { start, end },
+        // Let the server substitute — see the tool description. Its rules are not
+        // reproducible by string replacement.
+        variables: args.variables as Record<string, string> | undefined,
         bypass_cache: args.bypass_cache as boolean | undefined,
       });
       if (!res.success) return err(`Panel query failed: ${res.error?.message}`);
@@ -674,17 +882,11 @@ export async function handleDashboardsTool(
     case 'list_dashboards': {
       const res = await client.listDashboards(args.filter as 'my' | 'all' | undefined);
       if (!res.success) return err(`Failed to list dashboards: ${res.error?.message}`);
-      // The panels blob is large and rarely what you want from a list.
-      const summary = (res.data ?? []).map((dashboard) => ({
-        id: dashboard.id,
-        name: dashboard.name,
-        description: dashboard.description,
-        visibility: dashboard.visibility,
-        panel_count: Array.isArray(dashboard.panels) ? dashboard.panels.length : 0,
-        owner_name: dashboard.owner_name,
-        updated_at: dashboard.updated_at,
-      }));
-      return ok(summary);
+      // The endpoint already returns summaries carrying `panel_count` — it has no
+      // `panels` array at all. Deriving the count from `panels.length` reported
+      // every dashboard as empty, which would send an agent off to recreate one
+      // that already exists.
+      return ok(res.data);
     }
 
     case 'get_dashboard': {
@@ -730,10 +932,22 @@ export async function handleDashboardsTool(
 
         const merged = {
           name: dashboard.name ?? current.data?.name,
+          visibility: dashboard.visibility ?? current.data?.visibility,
           layout: dashboard.layout ?? current.data?.layout,
           panels: dashboard.panels ?? current.data?.panels,
         };
-        const check = validateDashboard(merged);
+
+        // Panels that were already here are judged by the server's whitelist, not
+        // the authoring one. Otherwise a dashboard containing a `tree` or
+        // `obs_metric` panel — which the platform stores happily and this agent did
+        // not create — could never be edited at all.
+        const existingPanelIds = new Set(
+          (current.data?.panels ?? [])
+            .map((panel) => panel?.id)
+            .filter((panelId): panelId is string => typeof panelId === 'string')
+        );
+
+        const check = validateDashboard(merged, { existingPanelIds });
         if (!check.valid) {
           return err(
             `This edit would leave the dashboard broken (${check.errors.length} error(s)):\n` +
@@ -748,8 +962,12 @@ export async function handleDashboardsTool(
       } as unknown as Parameters<typeof client.updateDashboard>[1]);
 
       if (!res.success) {
+        // The client stamps `HTTP_<status>`; it never surfaces the server's own
+        // code string, so matching on 'CONFLICT' silently never fired — and the
+        // one path `expected_updated_at` exists to enable was the one that didn't
+        // work.
         const code = res.error?.code;
-        if (code === 'CONFLICT' || code === 'CONFLICT_ERROR') {
+        if (code === 'HTTP_409') {
           return err(
             'Someone else changed this dashboard since you read it, so the write was refused ' +
               'rather than overwriting them. Call get_dashboard again, re-apply your change to ' +

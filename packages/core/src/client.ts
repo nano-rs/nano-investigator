@@ -98,6 +98,7 @@ import type {
   ParserSyncStartResponse,
   // Dashboards
   Dashboard,
+  DashboardSummary,
   CreateDashboardRequest,
   UpdateDashboardRequest,
   PanelQueryRequest,
@@ -355,8 +356,9 @@ export class NanosiemClient {
   // Dashboards
   // ---------------------------------------------------------------------------
 
-  async listDashboards(filter?: 'my' | 'all'): Promise<ApiResponse<Dashboard[]>> {
-    return this.request<Dashboard[]>('GET', '/api/dashboards', undefined, {
+  /** Returns SUMMARIES (panel_count, no panels/layout) — not full dashboards. */
+  async listDashboards(filter?: 'my' | 'all'): Promise<ApiResponse<DashboardSummary[]>> {
+    return this.request<DashboardSummary[]>('GET', '/api/dashboards', undefined, {
       query: { filter },
     });
   }

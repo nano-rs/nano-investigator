@@ -73,6 +73,7 @@ import { TOOLS as SEARCH_TOOLS, handleSearchTool } from './tools/search.js';
 import { TOOLS as ALERTS_TOOLS, handleAlertsTool } from './tools/alerts.js';
 import { TOOLS as CASES_TOOLS, handleCasesTool } from './tools/cases.js';
 import { TOOLS as NOTEBOOKS_TOOLS, handleNotebooksTool } from './tools/notebooks.js';
+import { TOOLS as DASHBOARDS_TOOLS, handleDashboardsTool } from './tools/dashboards.js';
 import { TOOLS as DETECTIONS_TOOLS, handleDetectionsTool } from './tools/detections.js';
 import { TOOLS as PREVALENCE_TOOLS, handlePrevalenceTool } from './tools/prevalence.js';
 import { TOOLS as RISK_TOOLS, handleRiskTool } from './tools/risk.js';
@@ -101,6 +102,7 @@ const ALL_TOOLS = [
   ...ALERTS_TOOLS,
   ...CASES_TOOLS,
   ...NOTEBOOKS_TOOLS,
+  ...DASHBOARDS_TOOLS,
   ...DETECTIONS_TOOLS,
   ...PREVALENCE_TOOLS,
   ...RISK_TOOLS,
@@ -115,6 +117,7 @@ const SEARCH_TOOL_NAMES = new Set(SEARCH_TOOLS.map((t) => t.name));
 const ALERTS_TOOL_NAMES = new Set(ALERTS_TOOLS.map((t) => t.name));
 const CASES_TOOL_NAMES = new Set(CASES_TOOLS.map((t) => t.name));
 const NOTEBOOKS_TOOL_NAMES = new Set(NOTEBOOKS_TOOLS.map((t) => t.name));
+const DASHBOARDS_TOOL_NAMES = new Set(DASHBOARDS_TOOLS.map((t) => t.name));
 const DETECTIONS_TOOL_NAMES = new Set(DETECTIONS_TOOLS.map((t) => t.name));
 const PREVALENCE_TOOL_NAMES = new Set(PREVALENCE_TOOLS.map((t) => t.name));
 const RISK_TOOL_NAMES = new Set(RISK_TOOLS.map((t) => t.name));
@@ -180,6 +183,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (ALERTS_TOOL_NAMES.has(name)) return handleAlertsTool(name, toolArgs, client);
   if (CASES_TOOL_NAMES.has(name)) return handleCasesTool(name, toolArgs, client);
   if (NOTEBOOKS_TOOL_NAMES.has(name)) return handleNotebooksTool(name, toolArgs, client);
+  if (DASHBOARDS_TOOL_NAMES.has(name)) return handleDashboardsTool(name, toolArgs, client);
   if (DETECTIONS_TOOL_NAMES.has(name)) return handleDetectionsTool(name, toolArgs, client);
   if (PREVALENCE_TOOL_NAMES.has(name)) return handlePrevalenceTool(name, toolArgs, client);
   if (RISK_TOOL_NAMES.has(name)) return handleRiskTool(name, toolArgs, client);

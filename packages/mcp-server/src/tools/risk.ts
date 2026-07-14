@@ -2,7 +2,7 @@
  * Risk scoring tools — entity-level risk aggregation
  */
 
-import type { NanosiemClient } from '@nano-investigator/core';
+import type { NanosiemClient } from '@nano-rs/investigator-core';
 import { type ToolResult, ok, err } from './utils.js';
 
 export const TOOLS = [

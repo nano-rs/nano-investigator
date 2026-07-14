@@ -3,7 +3,7 @@
  * The #1 SOC question, answered quantitatively.
  */
 
-import type { NanosiemClient } from '@nano-investigator/core';
+import type { NanosiemClient } from '@nano-rs/investigator-core';
 import { type ToolResult, ok, err } from './utils.js';
 
 export const TOOLS = [

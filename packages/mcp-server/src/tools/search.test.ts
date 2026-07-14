@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { NanosiemClient } from '@nano-investigator/core';
+import type { NanosiemClient } from '@nano-rs/investigator-core';
 import { handleSearchTool, parseRelativeTime, TOOLS } from './search.js';
 
 function makeMockClient(overrides: Partial<NanosiemClient> = {}): NanosiemClient {

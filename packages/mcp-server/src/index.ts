@@ -66,7 +66,7 @@ import {
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { NanosiemClient } from '@nano-investigator/core';
+import { NanosiemClient } from '@nano-rs/investigator-core';
 
 // Tools
 import { TOOLS as SEARCH_TOOLS, handleSearchTool } from './tools/search.js';

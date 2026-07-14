@@ -1,4 +1,4 @@
-import type { NanosiemClient, CaseStatus } from '@nano-investigator/core';
+import type { NanosiemClient, CaseStatus } from '@nano-rs/investigator-core';
 import { type ToolResult, ok, err } from './utils.js';
 
 export const TOOLS = [

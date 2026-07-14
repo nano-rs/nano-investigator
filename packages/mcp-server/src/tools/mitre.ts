@@ -2,7 +2,7 @@
  * MITRE ATT&CK tools — technique context and detection coverage
  */
 
-import type { NanosiemClient } from '@nano-investigator/core';
+import type { NanosiemClient } from '@nano-rs/investigator-core';
 import { type ToolResult, ok, err } from './utils.js';
 
 export const TOOLS = [

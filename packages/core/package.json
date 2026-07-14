@@ -1,5 +1,5 @@
 {
-  "name": "@nano-investigator/core",
+  "name": "@nano-rs/investigator-core",
   "version": "0.1.0",
   "description": "Core client and types for nano SOC operations",
   "type": "module",
@@ -13,7 +13,9 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -27,6 +29,15 @@
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
   },
-  "keywords": ["nanosiem", "soc", "security", "siem", "mcp"],
-  "license": "MIT"
+  "keywords": [
+    "nanosiem",
+    "soc",
+    "security",
+    "siem",
+    "mcp"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
 }

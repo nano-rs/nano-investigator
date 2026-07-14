@@ -41,8 +41,8 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
         version: 1.26.0(zod@4.3.6)
-      '@nano-investigator/core':
-        specifier: file:../core
+      '@nano-rs/investigator-core':
+        specifier: workspace:*
         version: link:../core
     devDependencies:
       '@types/node':

@@ -589,6 +589,19 @@ export class NanosiemClient {
     );
   }
 
+  /**
+   * Redeploy a source config (transport) so a routing rule just added to it takes
+   * effect. Best-effort, like deployLogSource — the API can return success even if
+   * the transport didn't reload; confirm downstream with getLogSourceHealth().
+   */
+  async deploySourceConfig(id: string): Promise<ApiResponse<DeploymentResult>> {
+    return this.request<DeploymentResult>('POST', `/api/source-configurations/${this.encodeId(id)}/deploy`);
+  }
+
+  async undeploySourceConfig(id: string): Promise<ApiResponse<DeploymentResult>> {
+    return this.request<DeploymentResult>('POST', `/api/source-configurations/${this.encodeId(id)}/undeploy`);
+  }
+
   // ==================== Parser Repositories (→ api) ====================
   // Browse and import parsers from an upstream library (e.g. nano-rs/parsers).
 

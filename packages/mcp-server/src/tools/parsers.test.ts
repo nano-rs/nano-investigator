@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { NanosiemClient } from '@nano-investigator/core';
+import type { NanosiemClient } from '@nano-rs/investigator-core';
 import { handleParsersTool, TOOLS } from './parsers.js';
 
 function makeMockClient(overrides: Partial<NanosiemClient> = {}): NanosiemClient {
@@ -136,6 +136,61 @@ describe('handleParsersTool dispatch', () => {
     const result = await handleParsersTool('deploy_log_source', { id: 'logsource_abc' }, client);
 
     expect(deployLogSource).toHaveBeenCalledWith('logsource_abc');
+    expect(JSON.parse(result.content[0].text as string).note).toMatch(/get_log_source_health/);
+  });
+
+  it('create_log_source carries the routed-feed match_values (the central router key)', async () => {
+    const createLogSource = vi.fn().mockResolvedValue({
+      success: true,
+      data: { id: 'logsource_cs', name: 'CrowdStrike', source_type: 'routed', deployed: false },
+    });
+    const client = makeMockClient({ createLogSource });
+
+    await handleParsersTool(
+      'create_log_source',
+      {
+        name: 'CrowdStrike Falcon',
+        source_type: 'routed',
+        parser_vrl: '.message = string!(.message)',
+        match_values: ['crowdstrike_falcon'],
+      },
+      client,
+    );
+
+    // Without match_values the parser would deploy deaf — assert they reach the API.
+    expect(createLogSource).toHaveBeenCalledWith({
+      name: 'CrowdStrike Falcon',
+      source_type: 'routed',
+      parser_vrl: '.message = string!(.message)',
+      match_values: ['crowdstrike_falcon'],
+    });
+  });
+
+  it('update_log_source carries match_values through', async () => {
+    const updateLogSource = vi.fn().mockResolvedValue({ success: true, data: { id: 'logsource_cs' } });
+    const client = makeMockClient({ updateLogSource });
+
+    await handleParsersTool(
+      'update_log_source',
+      { id: 'logsource_cs', match_values: ['crowdstrike_falcon', 'crowdstrike'] },
+      client,
+    );
+
+    expect(updateLogSource).toHaveBeenCalledWith('logsource_cs', {
+      match_values: ['crowdstrike_falcon', 'crowdstrike'],
+    });
+  });
+
+  it('deploy_source_config redeploys the ingress and advises confirming health', async () => {
+    const deploySourceConfig = vi.fn().mockResolvedValue({
+      success: true,
+      data: { success: true, source_configuration_id: 'srcfg_1', action: 'deploy', message: 'ok' },
+    });
+    const client = makeMockClient({ deploySourceConfig });
+
+    const result = await handleParsersTool('deploy_source_config', { id: 'srcfg_1' }, client);
+
+    expect(deploySourceConfig).toHaveBeenCalledWith('srcfg_1');
     expect(JSON.parse(result.content[0].text as string).note).toMatch(/get_log_source_health/);
   });
 

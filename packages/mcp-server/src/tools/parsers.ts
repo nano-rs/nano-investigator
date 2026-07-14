@@ -26,7 +26,7 @@ import type {
   NewRoutingRule,
   CheckReachabilityRequest,
   ImportParserRequest,
-} from '@nano-investigator/core';
+} from '@nano-rs/investigator-core';
 import { type ToolResult, ok, err } from './utils.js';
 
 export const TOOLS = [
@@ -99,16 +99,31 @@ export const TOOLS = [
   {
     name: 'create_log_source',
     description:
-      'Save a new parser as a DRAFT (validated server-side, NOT deployed — call deploy_log_source after). Only `name`, `source_type`, and `parser_vrl` are required. For a routed/HTTP source you can omit source_config (defaults to {}).',
+      'Save a new parser as a DRAFT (validated server-side, NOT deployed — call deploy_log_source after). Required: `name`, `source_type`, `parser_vrl`. For an HTTP/routed feed (the common case), set `source_type: "routed"` and `match_values` to the source_type value(s) your sender tags events with — the central router dispatches to this parser by those values. Omit `source_config` (defaults to {}). A routed feed ALSO needs a routing rule on the ingress + a redeploy of it — see create_routing_rule / deploy_source_config.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         name: { type: 'string', description: 'Human-readable parser name.' },
         source_type: {
           type: 'string',
-          description: 'The source_type this parser claims (e.g. "apache_http_server"). Routing delivers matching events here.',
+          description:
+            'Either the literal source_type this parser claims (e.g. "apache_http_server"), OR the sentinel "routed" for an HTTP/routed feed whose events the central router dispatches by `match_values`.',
         },
         parser_vrl: { type: 'string', description: 'The complete, validated VRL parser source.' },
+        match_values: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'The source_type value(s) this parser claims for routing — the central router delivers events tagged with any of these here. For an HTTP feed this is what your sender puts in the `X-Source-Type` header (e.g. ["crowdstrike_falcon"]). Set alongside source_type:"routed".',
+        },
+        match_field: {
+          type: 'string',
+          description: 'Advanced: the event field the router matches on. Defaults to source_type; leave unset for the normal routed flow.',
+        },
+        match_pattern: {
+          type: 'string',
+          description: 'Advanced: a regex the router matches against match_field, instead of exact match_values.',
+        },
         description: { type: 'string' },
         namespace: { type: 'string', description: 'Identity-resolution namespace. Defaults to "default".' },
         timezone: { type: 'string', description: 'IANA timezone for offset-less timestamps. Defaults to "UTC".' },
@@ -135,6 +150,13 @@ export const TOOLS = [
         description: { type: 'string' },
         parser_vrl: { type: 'string' },
         source_type: { type: 'string' },
+        match_values: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'The source_type value(s) this parser claims for routing (see create_log_source). Replaces the existing set.',
+        },
+        match_field: { type: 'string', description: 'Advanced: event field the router matches on. Defaults to source_type.' },
+        match_pattern: { type: 'string', description: 'Advanced: a regex the router matches against match_field instead of match_values.' },
         namespace: { type: 'string' },
         timezone: { type: 'string' },
         category: { type: 'string' },
@@ -235,6 +257,25 @@ export const TOOLS = [
       required: ['source_config_id', 'target_source_type', 'match_field', 'match_type', 'match_value'],
     },
   },
+  {
+    name: 'deploy_source_config',
+    description:
+      'Redeploy an ingress transport so a routing rule just added to it takes effect. REQUIRED after create_routing_rule for the rule to route live traffic. Best-effort like deploy_log_source — confirm with get_log_source_health afterwards.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: { id: { type: 'string', description: 'Source configuration id (typeid).' } },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'undeploy_source_config',
+    description: 'Take an ingress transport offline (removes it + its routing rules from the running Vector config).',
+    inputSchema: {
+      type: 'object' as const,
+      properties: { id: { type: 'string', description: 'Source configuration id (typeid).' } },
+      required: ['id'],
+    },
+  },
   // ---- Parser library (upstream repos) ----------------------------------
   {
     name: 'list_parser_repositories',
@@ -295,13 +336,21 @@ function buildNewLogSource(args: Record<string, unknown>): NewLogSource {
   if (args.vendor !== undefined) req.vendor = args.vendor as string;
   if (args.product !== undefined) req.product = args.product as string;
   if (args.source_config !== undefined) req.source_config = args.source_config as Record<string, unknown>;
+  // Routing: what source_type(s) this parser claims. Without these a routed feed
+  // deploys deaf — the central router has nothing to dispatch to it.
+  if (args.match_field !== undefined) req.match_field = args.match_field as string;
+  if (args.match_pattern !== undefined) req.match_pattern = args.match_pattern as string;
+  if (args.match_values !== undefined) req.match_values = args.match_values as string[];
   return req;
 }
 
 /** Build an UpdateLogSource from loosely-typed tool args (id excluded). */
 function buildUpdateLogSource(args: Record<string, unknown>): UpdateLogSource {
   const req: UpdateLogSource = {};
-  const fields = ['name', 'description', 'parser_vrl', 'source_type', 'namespace', 'timezone', 'category', 'vendor', 'product'] as const;
+  const fields = [
+    'name', 'description', 'parser_vrl', 'source_type', 'namespace', 'timezone',
+    'category', 'vendor', 'product', 'match_field', 'match_pattern', 'match_values',
+  ] as const;
   for (const f of fields) {
     if (args[f] !== undefined) (req as Record<string, unknown>)[f] = args[f];
   }
@@ -457,6 +506,21 @@ export async function handleParsersTool(
         };
         const res = await client.checkRoutingRuleReachability(args.source_config_id as string, req);
         if (!res.success) return err(res.error?.message ?? 'Failed to check rule reachability');
+        return ok(res.data);
+      }
+
+      case 'deploy_source_config': {
+        const res = await client.deploySourceConfig(args.id as string);
+        if (!res.success) return err(res.error?.message ?? 'Failed to deploy source config');
+        return ok({
+          ...res.data,
+          note: 'Transport redeployed. Best-effort — confirm events flow with get_log_source_health before calling the feed live.',
+        });
+      }
+
+      case 'undeploy_source_config': {
+        const res = await client.undeploySourceConfig(args.id as string);
+        if (!res.success) return err(res.error?.message ?? 'Failed to undeploy source config');
         return ok(res.data);
       }
 

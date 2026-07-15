@@ -1,7 +1,7 @@
 {
   "name": "@nano-rs/investigator-mcp-server",
-  "version": "0.1.2",
-  "description": "MCP server for nano SOC operations — search, triage, investigate, hunt",
+  "version": "0.1.3",
+  "description": "MCP server for nano SOC operations \u2014 search, triage, investigate, hunt",
   "type": "module",
   "main": "./dist/index.cjs",
   "bin": {

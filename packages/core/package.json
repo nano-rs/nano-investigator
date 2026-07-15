@@ -1,6 +1,6 @@
 {
   "name": "@nano-rs/investigator-core",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Core client and types for nano SOC operations",
   "type": "module",
   "main": "./dist/index.cjs",

@@ -1044,3 +1044,198 @@ export interface ParserSyncStartResponse {
   status: string;
   message: string;
 }
+
+// ---------------------------------------------------------------------------
+// Dashboards
+//
+// `panels` and `layout` are opaque `serde_json::Value` columns server-side —
+// NOTHING validates their shape on write. A malformed panel saves happily and
+// then breaks at every render. These types ARE the schema, and they mirror
+// nanosiem-web/src/lib/api/types.ts, which owns it.
+//
+// Note the casing split, which is not a mistake: dashboard-level fields are
+// snake_case (they're real columns), while everything INSIDE panels/layout is
+// camelCase (the frontend owns those blobs end to end).
+// ---------------------------------------------------------------------------
+
+export type DashboardVisibility = 'public' | 'group' | 'private';
+
+/**
+ * The visualization types that can actually be authored.
+ *
+ * `tree` and `flow` exist in the web app's enum but the backend REJECTS the
+ * commands they need (HTTP 400), and `obs_metric` is fetched from the metrics
+ * endpoint rather than the panel-query path. All three are omitted here so an
+ * agent cannot author a panel that is broken by construction.
+ */
+export type VisualizationType =
+  | 'bar'
+  | 'line'
+  | 'area'
+  | 'pie'
+  | 'table'
+  | 'single_value'
+  | 'timeline'
+  | 'ranked_bar'
+  | 'transaction';
+
+export interface ThresholdConfig {
+  value: number;
+  color: string;
+  label?: string;
+}
+
+export interface TableColumnConfig {
+  field: string;
+  label: string;
+  sortable: boolean;
+  width?: number;
+}
+
+/** One flat bag of options for every viz type — not a per-type union. */
+export interface VisualizationConfig {
+  orientation?: 'horizontal' | 'vertical';
+  stacked?: boolean;
+  showPoints?: boolean;
+  smooth?: boolean;
+  fillOpacity?: number;
+  showLabels?: boolean;
+  columns?: TableColumnConfig[];
+  pageSize?: number;
+  unit?: string;
+  thresholds?: ThresholdConfig[];
+  showTrend?: boolean;
+  maxEventsShown?: number;
+}
+
+export interface PanelConfig {
+  id: string;
+  title: string;
+  query: string;
+  queryMode: 'piped' | 'sql';
+  visualizationType: VisualizationType;
+  visualizationConfig: VisualizationConfig;
+  timeRangeMode: 'dashboard' | 'custom';
+  customTimeRange?: { start: string; end: string };
+  drilldownEnabled: boolean;
+  drilldownTemplate?: string;
+}
+
+/** react-grid-layout's item shape, 1:1. `i` MUST equal a PanelConfig.id. */
+export interface LayoutItem {
+  i: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  minW?: number;
+  minH?: number;
+}
+
+export type DashboardVariableType = 'dropdown' | 'text' | 'query';
+
+export interface DashboardVariable {
+  /** Referenced in a panel query as `$name`. */
+  name: string;
+  label: string;
+  type: DashboardVariableType;
+  defaultValue?: string;
+  /** `dropdown`: the fixed choices. */
+  options?: string[];
+  /** `query`: an nPL query whose results supply the choices. */
+  query?: string;
+  queryField?: string;
+}
+
+export interface DashboardLayout {
+  columns: number;
+  rowHeight: number;
+  items: LayoutItem[];
+  /** Variables live inside `layout` purely for persistence. It's a wart; it's the contract. */
+  variables?: DashboardVariable[];
+  defaultTimeRange?:
+    | { type: 'preset'; preset: string }
+    | { type: 'custom'; start: string; end: string };
+  /** When true, panels run on open. Otherwise the dashboard waits for a click. */
+  autoRun?: boolean;
+}
+
+export interface Dashboard {
+  id: string;
+  name: string;
+  description?: string;
+  layout: DashboardLayout;
+  panels: PanelConfig[];
+  refresh_interval?: number;
+  owner_id?: string;
+  owner_name?: string;
+  visibility: DashboardVisibility;
+  is_owner?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * What `GET /api/dashboards` actually returns — a SUMMARY, not a Dashboard.
+ * It carries `panel_count` and has no `panels`/`layout` at all, so treating the
+ * list response as `Dashboard[]` reports every dashboard as having zero panels.
+ */
+export interface DashboardSummary {
+  id: string;
+  name: string;
+  description?: string;
+  panel_count: number;
+  owner_id?: string;
+  owner_name?: string;
+  visibility: DashboardVisibility;
+  shared_groups?: unknown[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateDashboardRequest {
+  name: string;
+  description?: string;
+  layout: DashboardLayout;
+  panels: PanelConfig[];
+  refresh_interval?: number;
+  visibility?: DashboardVisibility;
+}
+
+export interface UpdateDashboardRequest {
+  name?: string;
+  description?: string | null;
+  layout?: DashboardLayout;
+  panels?: PanelConfig[];
+  refresh_interval?: number | null;
+  /**
+   * Optimistic concurrency. Send the `updated_at` you read, and the server
+   * returns 409 if someone changed it since — rather than letting this write
+   * silently clobber theirs.
+   */
+  expected_updated_at?: string;
+}
+
+export interface PanelQueryRequest {
+  query: string;
+  query_mode: 'piped' | 'sql';
+  time_range: { start: string; end: string };
+  variables?: Record<string, string>;
+  bypass_cache?: boolean;
+}
+
+export interface PanelQueryResponse {
+  results: Record<string, unknown>[];
+  total_count: number;
+  execution_time_ms: number;
+  /**
+   * Group-by columns first, aggregates last. LOAD-BEARING for rendering: without
+   * it a renderer cannot tell a numeric group-by (`dest_port`) from a numeric
+   * aggregate (`count`), and will plot the port number as the bar height.
+   */
+  column_order?: string[];
+  /** The result hit the 10,000-row panel cap. */
+  truncated?: boolean;
+  cached?: boolean;
+  cache_age_secs?: number;
+}

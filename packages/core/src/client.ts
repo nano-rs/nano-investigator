@@ -96,6 +96,13 @@ import type {
   ImportParserRequest,
   ImportParserResponse,
   ParserSyncStartResponse,
+  // Dashboards
+  Dashboard,
+  DashboardSummary,
+  CreateDashboardRequest,
+  UpdateDashboardRequest,
+  PanelQueryRequest,
+  PanelQueryResponse,
 } from './types.js';
 
 export interface NanosiemClientConfig {
@@ -344,6 +351,41 @@ export class NanosiemClient {
   }
 
   // ==================== Notebooks (→ api) ====================
+
+  // ---------------------------------------------------------------------------
+  // Dashboards
+  // ---------------------------------------------------------------------------
+
+  /** Returns SUMMARIES (panel_count, no panels/layout) — not full dashboards. */
+  async listDashboards(filter?: 'my' | 'all'): Promise<ApiResponse<DashboardSummary[]>> {
+    return this.request<DashboardSummary[]>('GET', '/api/dashboards', undefined, {
+      query: { filter },
+    });
+  }
+
+  async getDashboard(id: string): Promise<ApiResponse<Dashboard>> {
+    return this.request<Dashboard>('GET', `/api/dashboards/${this.encodeId(id)}`);
+  }
+
+  async createDashboard(req: CreateDashboardRequest): Promise<ApiResponse<Dashboard>> {
+    return this.request<Dashboard>('POST', '/api/dashboards', req);
+  }
+
+  async updateDashboard(
+    id: string,
+    req: UpdateDashboardRequest,
+  ): Promise<ApiResponse<Dashboard>> {
+    return this.request<Dashboard>('PUT', `/api/dashboards/${this.encodeId(id)}`, req);
+  }
+
+  /**
+   * Run ONE panel's query. This is how an agent proves a panel actually returns
+   * rows instead of asserting that it will — nothing validates panel shape on
+   * write, so a dashboard saved without this check can be broken at every render.
+   */
+  async dashboardPanelQuery(req: PanelQueryRequest): Promise<ApiResponse<PanelQueryResponse>> {
+    return this.request<PanelQueryResponse>('POST', '/api/dashboards/panel/query', req);
+  }
 
   async listNotebooks(params?: NotebookListParams): Promise<ApiResponse<NotebookWithOwner[]>> {
     return this.request<NotebookWithOwner[]>('GET', '/api/notebooks', undefined, {

@@ -621,6 +621,26 @@ export interface RiskEntitiesQuery {
   offset?: number;
 }
 
+export interface EntityDailyCount {
+  date: string;
+  count: number;
+}
+
+export interface EntityActivityResponse {
+  activity: Record<string, EntityDailyCount[]>;
+}
+
+export interface ClearEntityRiskRequest {
+  entity: string;
+  entity_type?: string;
+  reason?: string;
+}
+
+export interface ClearRiskResponse {
+  success: boolean;
+  cleared_count: number;
+}
+
 // ============================================================================
 // Enrichment Types
 // ============================================================================

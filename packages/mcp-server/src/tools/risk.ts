@@ -61,6 +61,52 @@ export const TOOLS = [
       required: ['entity'],
     },
   },
+  {
+    name: 'get_entity_risk_activity',
+    description:
+      'Daily finding counts per entity over time — the risk "heatmap". Shows WHEN an entity accrued risk (a steady drip vs a sudden burst), which helps tell an ongoing campaign from a one-off spike. Pass the entities you care about; returns a per-day count series for each.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        entities: {
+          type: 'array',
+          description: 'Entities to fetch activity for.',
+          items: {
+            type: 'object',
+            properties: {
+              entity: { type: 'string' },
+              entity_type: { type: 'string' },
+            },
+            required: ['entity', 'entity_type'],
+          },
+        },
+      },
+      required: ['entities'],
+    },
+  },
+  {
+    name: 'reset_entity_risk',
+    description:
+      "Reset ONE entity's risk score to baseline after it has been investigated — e.g. a confirmed false positive or sanctioned red-team / IT activity. DESTRUCTIVE: it clears the accumulated score (underlying alerts and cases are untouched) and is audit-logged with your reason. Only reset an entity you have actually reviewed; never reset merely to \"clean up\" the leaderboard. Requires the risk:clear permission — the caller's key may not have it.",
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        entity: {
+          type: 'string',
+          description: 'Entity value to reset (IP, username, hostname, …)',
+        },
+        entity_type: {
+          type: 'string',
+          description: 'Entity type (e.g., "user", "ip", "host")',
+        },
+        reason: {
+          type: 'string',
+          description: 'Why the reset is justified (audited). Be specific — this is the record.',
+        },
+      },
+      required: ['entity', 'reason'],
+    },
+  },
 ];
 
 export async function handleRiskTool(
@@ -93,6 +139,23 @@ export async function handleRiskTool(
           args.entity_type as string | undefined
         );
         if (!res.success) return err(res.error?.message ?? 'Failed to get entity risk timeline');
+        return ok(res.data);
+      }
+
+      case 'get_entity_risk_activity': {
+        const entities = (args.entities as { entity: string; entity_type: string }[]) ?? [];
+        const res = await client.getEntityRiskActivity(entities);
+        if (!res.success) return err(res.error?.message ?? 'Failed to get entity risk activity');
+        return ok(res.data);
+      }
+
+      case 'reset_entity_risk': {
+        const res = await client.clearEntityRisk({
+          entity: args.entity as string,
+          entity_type: args.entity_type as string | undefined,
+          reason: args.reason as string | undefined,
+        });
+        if (!res.success) return err(res.error?.message ?? 'Failed to reset entity risk');
         return ok(res.data);
       }
 

@@ -1,0 +1,41 @@
+{
+  "name": "@nano-rs/investigator-recon-mcp-server",
+  "version": "0.1.0",
+  "description": "Local recon MCP server for nano — whois / DNS / ASN lookups run on the analyst's own machine",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "bin": {
+    "nano-recon": "./dist/index.cjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.7.0"
+  },
+  "keywords": [
+    "nanosiem",
+    "soc",
+    "security",
+    "mcp",
+    "recon",
+    "whois",
+    "dns",
+    "asn"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

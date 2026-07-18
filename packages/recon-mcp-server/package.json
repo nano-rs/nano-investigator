@@ -1,6 +1,6 @@
 {
   "name": "@nano-rs/investigator-recon-mcp-server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local recon MCP server for nano — whois / DNS / ASN lookups run on the analyst's own machine",
   "type": "module",
   "main": "./dist/index.cjs",

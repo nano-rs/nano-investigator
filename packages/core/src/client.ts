@@ -61,6 +61,9 @@ import type {
   RiskOverviewResponse,
   RiskEntitiesResponse,
   RiskEntitiesQuery,
+  EntityActivityResponse,
+  ClearEntityRiskRequest,
+  ClearRiskResponse,
   // Enrichment
   IpLookupResult,
   // MITRE
@@ -487,6 +490,21 @@ export class NanosiemClient {
     return this.request<RiskEntitiesResponse>('GET', '/api/risk/time-windowed', undefined, {
       query: { entity, entity_type: entityType },
     });
+  }
+
+  /** Daily finding counts per entity — the risk "heatmap". */
+  async getEntityRiskActivity(
+    entities: { entity: string; entity_type: string }[]
+  ): Promise<ApiResponse<EntityActivityResponse>> {
+    const encoded = entities.map((e) => `${e.entity}|${e.entity_type}`).join(',');
+    return this.request<EntityActivityResponse>('GET', '/api/risk/entity-activity', undefined, {
+      query: { entities: encoded },
+    });
+  }
+
+  /** Reset one entity's risk to baseline. DESTRUCTIVE — requires `risk:clear`. */
+  async clearEntityRisk(req: ClearEntityRiskRequest): Promise<ApiResponse<ClearRiskResponse>> {
+    return this.request<ClearRiskResponse>('POST', '/api/risk/clear', req);
   }
 
   // ==================== Enrichment (→ api) ====================

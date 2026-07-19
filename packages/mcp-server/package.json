@@ -1,6 +1,6 @@
 {
   "name": "@nano-rs/investigator-mcp-server",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "MCP server for nano SOC operations \u2014 search, triage, investigate, hunt",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -12,6 +12,7 @@
   ],
   "scripts": {
     "build": "tsup",
+    "prepublishOnly": "pnpm run build",
     "dev": "tsup --watch",
     "test": "vitest",
     "typecheck": "tsc --noEmit",

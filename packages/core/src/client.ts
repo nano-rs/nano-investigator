@@ -93,6 +93,9 @@ import type {
   NewRoutingRule,
   CheckReachabilityRequest,
   ReachabilityResult,
+  NewSourceConfiguration,
+  Credential,
+  NewCredential,
   ListParserRepositoriesResponse,
   RepositoryParser,
   ListRepositoryParsersParams,
@@ -660,6 +663,34 @@ export class NanosiemClient {
 
   async undeploySourceConfig(id: string): Promise<ApiResponse<DeploymentResult>> {
     return this.request<DeploymentResult>('POST', `/api/source-configurations/${this.encodeId(id)}/undeploy`);
+  }
+
+  /**
+   * Create a new ingress transport. For a credentialed pull source
+   * (kafka / aws_s3 / gcp_pubsub) reference a stored credential via
+   * `credential_id`; routing rules can be created inline. NOT deployed — call
+   * deploySourceConfig(id) after. Requires `source_configs:create`.
+   */
+  async createSourceConfig(req: NewSourceConfiguration): Promise<ApiResponse<SourceConfiguration>> {
+    return this.request<SourceConfiguration>('POST', '/api/source-configurations', req);
+  }
+
+  // ==================== Credentials (→ api) ====================
+  // Encrypted cloud-transport secrets (AWS keys / GCP SA JSON / Kafka SASL).
+  // Only metadata is ever returned; the secret is write-only into the store and
+  // is decrypted server-side into the Vector config at deploy.
+
+  async listCredentials(): Promise<ApiResponse<Credential[]>> {
+    return this.request<Credential[]>('GET', '/api/credentials');
+  }
+
+  /**
+   * Store a new credential. The secret in `req.credentials` is AES-256-GCM
+   * encrypted server-side; the response carries metadata only. Requires
+   * `credentials:create` (admin).
+   */
+  async createCredential(req: NewCredential): Promise<ApiResponse<Credential>> {
+    return this.request<Credential>('POST', '/api/credentials', req);
   }
 
   // ==================== Parser Repositories (→ api) ====================

@@ -81,6 +81,7 @@ import { TOOLS as ENRICHMENT_TOOLS, handleEnrichmentTool } from './tools/enrichm
 import { TOOLS as MITRE_TOOLS, handleMitreTool } from './tools/mitre.js';
 import { TOOLS as SYSTEM_TOOLS, handleSystemTool } from './tools/system.js';
 import { TOOLS as PARSERS_TOOLS, handleParsersTool } from './tools/parsers.js';
+import { TOOLS as ONBOARDING_TOOLS, handleOnboardingTool } from './tools/onboarding.js';
 
 // Resources
 import { UDM_SCHEMA_RESOURCE, UDM_SCHEMA_CONTENT, UDM_SCHEMA_URI } from './resources/udm-schema.js';
@@ -110,6 +111,7 @@ const ALL_TOOLS = [
   ...MITRE_TOOLS,
   ...SYSTEM_TOOLS,
   ...PARSERS_TOOLS,
+  ...ONBOARDING_TOOLS,
 ];
 
 // Map tool names to their category handler
@@ -125,6 +127,7 @@ const ENRICHMENT_TOOL_NAMES = new Set(ENRICHMENT_TOOLS.map((t) => t.name));
 const MITRE_TOOL_NAMES = new Set(MITRE_TOOLS.map((t) => t.name));
 const SYSTEM_TOOL_NAMES = new Set(SYSTEM_TOOLS.map((t) => t.name));
 const PARSERS_TOOL_NAMES = new Set(PARSERS_TOOLS.map((t) => t.name));
+const ONBOARDING_TOOL_NAMES = new Set(ONBOARDING_TOOLS.map((t) => t.name));
 
 // ==================== Client Setup ====================
 
@@ -191,6 +194,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (MITRE_TOOL_NAMES.has(name)) return handleMitreTool(name, toolArgs, client);
   if (SYSTEM_TOOL_NAMES.has(name)) return handleSystemTool(name, toolArgs, client);
   if (PARSERS_TOOL_NAMES.has(name)) return handleParsersTool(name, toolArgs, client);
+  if (ONBOARDING_TOOL_NAMES.has(name)) return handleOnboardingTool(name, toolArgs, client);
 
   return {
     content: [{ type: 'text', text: `Unknown tool: ${name}` }],

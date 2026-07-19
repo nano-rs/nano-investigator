@@ -992,6 +992,81 @@ export interface ReachabilityResult {
   warnings: string[];
 }
 
+export interface NewSourceConfiguration {
+  name: string;
+  description?: string;
+  /** "http" | "kafka" | "aws_s3" | "gcp_pubsub" | "splunk_hec" | "vector" | "otlp" */
+  config_type: string;
+  /** Transport-specific settings. {} for http / splunk_hec / otlp. */
+  connection_config: Record<string, unknown>;
+  /** Stored credential id — required for kafka / aws_s3 / gcp_pubsub. */
+  credential_id?: string;
+  /** Fallback source_type for pull-source events matching no routing rule (NAN-1919). */
+  default_source_type?: string;
+  /** Routing rules to create together with the transport. */
+  routing_rules?: NewRoutingRule[];
+}
+
+// --- Credentials (encrypted cloud-transport secrets) ---
+
+/**
+ * A stored credential's METADATA — never the secret material. The secret is
+ * AES-256-GCM encrypted at rest server-side and only decrypted into the Vector
+ * config at deploy. A SourceConfiguration references one by `credential_id`.
+ */
+export interface Credential {
+  id: string;
+  name: string;
+  /** "aws_s3" | "gcp_pubsub" | "kafka" */
+  provider: string;
+  description?: string | null;
+  region?: string | null;
+  environment?: string | null;
+  expires_at?: string | null;
+  last_used_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** AWS access keys (or an assume-role ARN). */
+export interface AwsS3CredentialSecret {
+  access_key_id: string;
+  secret_access_key: string;
+  session_token?: string;
+  assume_role_arn?: string;
+}
+
+/** A GCP service-account key — the ENTIRE JSON key file, as a string. */
+export interface GcpPubSubCredentialSecret {
+  credentials_json: string;
+}
+
+/** Kafka SASL / TLS. */
+export interface KafkaCredentialSecret {
+  sasl_mechanism?: string;
+  sasl_username?: string;
+  sasl_password?: string;
+  tls_enabled?: boolean;
+  tls_ca_cert?: string;
+}
+
+export type CredentialSecret =
+  | AwsS3CredentialSecret
+  | GcpPubSubCredentialSecret
+  | KafkaCredentialSecret;
+
+export interface NewCredential {
+  name: string;
+  /** "aws_s3" | "gcp_pubsub" | "kafka" */
+  provider: string;
+  /** Provider-specific secret; encrypted server-side before storage. */
+  credentials: CredentialSecret;
+  description?: string;
+  region?: string;
+  environment?: string;
+  expires_at?: string;
+}
+
 // --- Parser repositories (importable parser library, e.g. nano-rs/parsers) ---
 
 export interface ParserRepository {

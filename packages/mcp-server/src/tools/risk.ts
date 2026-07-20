@@ -8,6 +8,7 @@ import { type ToolResult, ok, err } from './utils.js';
 export const TOOLS = [
   {
     name: 'get_risky_entities',
+    annotations: { readOnlyHint: true },
     description:
       'Get the top entities by risk score — who or what is most suspicious right now. Returns entities ranked by accumulated risk from detection rule matches. Use this to prioritize investigation: high-risk entities deserve attention first.',
     inputSchema: {
@@ -35,6 +36,7 @@ export const TOOLS = [
   },
   {
     name: 'get_risk_overview',
+    annotations: { readOnlyHint: true },
     description:
       'Risk landscape summary: how many entities exceed each risk level (critical/high/medium/low), total findings, and average risk score. Provides both 24-hour and 7-day views. Good for shift briefings and trend assessment.',
     inputSchema: {
@@ -44,6 +46,7 @@ export const TOOLS = [
   },
   {
     name: 'get_entity_risk_timeline',
+    annotations: { readOnlyHint: true },
     description:
       'Get risk score over time for a specific entity. Shows how risk has escalated or decreased, useful for understanding whether a situation is getting worse. Helps distinguish ongoing attacks from one-time events.',
     inputSchema: {
@@ -63,6 +66,7 @@ export const TOOLS = [
   },
   {
     name: 'get_entity_risk_activity',
+    annotations: { readOnlyHint: true },
     description:
       'Daily finding counts per entity over time — the risk "heatmap". Shows WHEN an entity accrued risk (a steady drip vs a sudden burst), which helps tell an ongoing campaign from a one-off spike. Pass the entities you care about; returns a per-day count series for each.',
     inputSchema: {

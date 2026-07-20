@@ -8,6 +8,7 @@ import { type ToolResult, ok, err } from './utils.js';
 export const TOOLS = [
   {
     name: 'get_source_types',
+    annotations: { readOnlyHint: true },
     description:
       'Get available log source types in the SIEM. Essential for building correct queries — knowing what source types exist (e.g., "windows_security", "sysmon", "firewall_paloalto") determines which fields and events are available. Call this before building queries for unfamiliar data types.',
     inputSchema: {
@@ -17,6 +18,7 @@ export const TOOLS = [
   },
   {
     name: 'get_org_context',
+    annotations: { readOnlyHint: true },
     description:
       'Get organizational context: company name, industry, compliance frameworks, internal IP ranges, critical assets, and business hours. This context helps tailor investigations — e.g., activity outside business hours may be more suspicious, internal IP ranges help distinguish internal vs external traffic.',
     inputSchema: {
@@ -26,6 +28,7 @@ export const TOOLS = [
   },
   {
     name: 'health_check',
+    annotations: { readOnlyHint: true },
     description:
       'Check SIEM health status including ClickHouse and PostgreSQL connectivity. Use this to verify the system is operational before running searches, or to diagnose why queries may be failing.',
     inputSchema: {
@@ -35,6 +38,7 @@ export const TOOLS = [
   },
   {
     name: 'get_audit_trail',
+    annotations: { readOnlyHint: true },
     description:
       'Query the SIEM audit trail. Shows all security-relevant actions including searches executed, alerts triaged, cases created/updated, and detection rule changes. Filter by user, action type, resource type, time range, and success/failure. Also tracks Claude\'s own actions through the MCP server.',
     inputSchema: {

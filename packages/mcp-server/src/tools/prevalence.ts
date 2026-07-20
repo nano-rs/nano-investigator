@@ -9,6 +9,7 @@ import { type ToolResult, ok, err } from './utils.js';
 export const TOOLS = [
   {
     name: 'get_prevalence',
+    annotations: { readOnlyHint: true },
     description:
       'Check how common an artifact is across the environment. Returns host count, total occurrences, first/last seen, and whether it is considered rare. Works for file hashes, domains, and IP addresses. Critical for determining if something is suspicious — an artifact seen on 1 of 4000 hosts is far more interesting than one seen on 3500.',
     inputSchema: {
@@ -29,6 +30,7 @@ export const TOOLS = [
   },
   {
     name: 'get_rare_artifacts',
+    annotations: { readOnlyHint: true },
     description:
       'Find rare artifacts in the environment — things seen on fewer than the rarity threshold number of hosts. Useful for hunting: rare artifacts are more likely to be suspicious. Returns artifacts sorted by host count (rarest first).',
     inputSchema: {
@@ -56,6 +58,7 @@ export const TOOLS = [
   },
   {
     name: 'get_new_artifacts',
+    annotations: { readOnlyHint: true },
     description:
       'Find artifacts seen for the first time recently. New artifacts in an environment warrant attention — they may indicate new software, lateral movement, or compromise. Returns artifacts sorted by first_seen (newest first).',
     inputSchema: {

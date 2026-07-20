@@ -8,6 +8,7 @@ import { type ToolResult, ok, err } from './utils.js';
 export const TOOLS = [
   {
     name: 'get_mitre_technique',
+    annotations: { readOnlyHint: true },
     description:
       'Get MITRE ATT&CK data including all techniques and tactics. Returns the full ATT&CK framework data with technique details, descriptions, and mappings. Use this to understand what adversary behaviors look like and how they map to detection rules.',
     inputSchema: {
@@ -22,6 +23,7 @@ export const TOOLS = [
   },
   {
     name: 'get_mitre_coverage',
+    annotations: { readOnlyHint: true },
     description:
       'Get detection coverage mapped to the MITRE ATT&CK framework. Shows which techniques have detection rules, total vs covered technique counts, and coverage percentage. Identifies gaps in detection coverage.',
     inputSchema: {

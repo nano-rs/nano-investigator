@@ -8,6 +8,7 @@ import { type ToolResult, ok, err } from './utils.js';
 export const TOOLS = [
   {
     name: 'get_entity_context',
+    annotations: { readOnlyHint: true },
     description:
       'Get rich context for any entity (IP, user, host, domain, hash). Performs a composite enrichment: searches recent activity, checks risk score, looks up alerts and cases involving this entity. This is the investigation pivot tool — call it when you encounter an entity and need to decide "is this interesting?"',
     inputSchema: {
@@ -28,6 +29,7 @@ export const TOOLS = [
   },
   {
     name: 'lookup_ip',
+    annotations: { readOnlyHint: true },
     description:
       'GeoIP + ASN enrichment for an IP address. Returns country, continent, ASN number, AS name, and AS domain. Useful for determining if an IP is from an expected geography or a suspicious location.',
     inputSchema: {

@@ -141,6 +141,7 @@ export const TRANSPORT_REQUIREMENTS: Record<string, TransportRequirement> = {
 export const TOOLS = [
   {
     name: 'onboarding_requirements',
+    annotations: { readOnlyHint: true },
     description:
       'What a transport needs to be onboarded: the connection_config fields to collect (and which are required), whether a stored credential is needed, and the routing match_field convention. Call this FIRST when a user wants to onboard a feed, so you ask exactly the right questions for their transport. Omit config_type to list all transports.',
     inputSchema: {

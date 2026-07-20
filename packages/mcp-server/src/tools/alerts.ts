@@ -8,6 +8,7 @@ import { type ToolResult, ok, err } from './utils.js';
 export const TOOLS = [
   {
     name: 'list_alerts',
+    annotations: { readOnlyHint: true },
     description:
       'List alerts from the SIEM with optional filters. Returns alert summaries including severity, status, rule name, and timestamps. Use this to review the current alert queue or find alerts matching specific criteria.',
     inputSchema: {
@@ -44,6 +45,7 @@ export const TOOLS = [
   },
   {
     name: 'get_alert',
+    annotations: { readOnlyHint: true },
     description:
       'Get full details for a single alert, including matched events, associated detection rule information, and AI triage hints. Use this to deeply inspect an alert during investigation.',
     inputSchema: {
@@ -59,6 +61,7 @@ export const TOOLS = [
   },
   {
     name: 'get_alert_counts',
+    annotations: { readOnlyHint: true },
     description:
       'Get a summary breakdown of alert counts by severity and status. Useful for understanding the current alert landscape and prioritizing triage work.',
     inputSchema: {

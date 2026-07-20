@@ -632,6 +632,7 @@ export function validateDashboard(
 export const TOOLS = [
   {
     name: 'get_dashboard_schema',
+    annotations: { readOnlyHint: true },
     description:
       'READ THIS BEFORE AUTHORING A DASHBOARD. Returns the dashboard/panel authoring contract: ' +
       'the visualization types that actually work, the layout grid rules, the panel-query ' +
@@ -643,6 +644,7 @@ export const TOOLS = [
   },
   {
     name: 'validate_dashboard',
+    annotations: { readOnlyHint: true },
     description:
       'Check a dashboard you are about to save against every rule the renderer and backend ' +
       'enforce — panel ids matching layout items, grid bounds, overlaps, blocked commands, ' +
@@ -664,6 +666,7 @@ export const TOOLS = [
   },
   {
     name: 'dashboard_panel_query',
+    annotations: { readOnlyHint: true },
     description:
       'Run ONE panel\'s query and return its rows — the way to PROVE a panel works before you save ' +
       'it. A dashboard whose panels were never run is a dashboard of empty boxes.\n' +
@@ -724,6 +727,7 @@ export const TOOLS = [
   },
   {
     name: 'list_dashboards',
+    annotations: { readOnlyHint: true },
     description:
       'List dashboards. Use this before creating one — the dashboard the user wants may already ' +
       'exist, and editing it beats adding a near-duplicate.',
@@ -741,6 +745,7 @@ export const TOOLS = [
   },
   {
     name: 'get_dashboard',
+    annotations: { readOnlyHint: true },
     description:
       'Fetch one dashboard in full, including its `panels` and `layout` JSON. This is what you ' +
       'edit: modify the panels/layout you get back and send the whole thing to update_dashboard.',

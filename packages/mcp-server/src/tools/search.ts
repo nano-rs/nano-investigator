@@ -36,6 +36,7 @@ export function parseRelativeTime(time: string): string {
 export const TOOLS = [
   {
     name: 'search_sql',
+    annotations: { readOnlyHint: true },
     description:
       'PRIMARY search tool. Run a ClickHouse SQL SELECT against the SIEM log store.\n' +
       '\n' +
@@ -93,6 +94,7 @@ export const TOOLS = [
   },
   {
     name: 'get_schema',
+    annotations: { readOnlyHint: true },
     description:
       'Return the UDM (Unified Data Model) schema for the log store. Call this before writing SQL the first time in a session so you know which columns exist and avoid hallucinating field names.\n' +
       '\n' +
@@ -120,6 +122,7 @@ export const TOOLS = [
   },
   {
     name: 'search',
+    annotations: { readOnlyHint: true },
     description:
       'Execute an nPL (nano Pipe Language) query — Splunk-compatible piped syntax — against the SIEM log data.\n' +
       '\n' +
@@ -163,6 +166,7 @@ export const TOOLS = [
   },
   {
     name: 'explain_query',
+    annotations: { readOnlyHint: true },
     description:
       'Show the compiled SQL that an nPL query would generate without executing it. ' +
       'Useful for understanding what a piped query translates to, debugging unexpected results, ' +
@@ -188,6 +192,7 @@ export const TOOLS = [
   },
   {
     name: 'get_field_values',
+    annotations: { readOnlyHint: true },
     description:
       'Retrieve the top values for a specific field in the log data. ' +
       'Returns value, count, and percentage for each top value. ' +
@@ -222,6 +227,7 @@ export const TOOLS = [
   },
   {
     name: 'list_saved_searches',
+    annotations: { readOnlyHint: true },
     description:
       'List all saved searches. Saved searches are reusable nPL or SQL queries that analysts have bookmarked. ' +
       'Returns the name, query, query mode, and visibility of each saved search.',
@@ -233,6 +239,7 @@ export const TOOLS = [
   },
   {
     name: 'get_saved_search',
+    annotations: { readOnlyHint: true },
     description:
       'Retrieve a specific saved search by its ID. Returns the full saved search details including ' +
       'the query, query mode, time range, and visibility settings.',

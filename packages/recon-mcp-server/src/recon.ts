@@ -64,6 +64,7 @@ async function digTxt(name: string): Promise<string> {
 export const TOOLS = [
   {
     name: 'whois',
+    annotations: { readOnlyHint: true },
     description:
       "Live WHOIS registration for a domain or IP — registrar/owner, org, creation/expiry dates, name servers, abuse contact. Runs the LOCAL `whois` against the current registry, so it reflects reality NOW, not the SIEM's cached enrichment. Use to attribute a domain or IP during an investigation.",
     inputSchema: {
@@ -76,6 +77,7 @@ export const TOOLS = [
   },
   {
     name: 'dns_lookup',
+    annotations: { readOnlyHint: true },
     description:
       'Live DNS resolution for a hostname — the CURRENT records: A/AAAA (where it points now), MX (mail), TXT (SPF/DKIM/verification), NS, CNAME, etc. Runs the local `dig`. Use to see where a domain resolves right now, catch fast-flux, or read SPF/TXT.',
     inputSchema: {
@@ -92,6 +94,7 @@ export const TOOLS = [
   },
   {
     name: 'reverse_dns',
+    annotations: { readOnlyHint: true },
     description:
       'Reverse DNS (PTR) for an IP — the hostname it claims. Runs the local `dig -x`. Use to sanity-check an IP\'s identity (e.g. does a "google" IP actually PTR to google).',
     inputSchema: {
@@ -102,6 +105,7 @@ export const TOOLS = [
   },
   {
     name: 'asn_lookup',
+    annotations: { readOnlyHint: true },
     description:
       "ASN / BGP origin for an IPv4 — the autonomous system (AS number + name), announced prefix, country, and registry, via Team Cymru's free DNS service (no API key). Use to see who ROUTES an IP (hosting provider / ISP / cloud) and spot traffic from a suspicious network.",
     inputSchema: {

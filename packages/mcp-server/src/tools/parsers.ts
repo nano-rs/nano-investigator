@@ -33,6 +33,7 @@ export const TOOLS = [
   // ---- Discover ---------------------------------------------------------
   {
     name: 'list_log_sources',
+    annotations: { readOnlyHint: true },
     description:
       'List all log-source parsers. Returns a summary (id, name, source_type, deployed/validated/enabled, kind). Optionally filter. Use get_log_source for the full parser_vrl and metadata.',
     inputSchema: {
@@ -47,6 +48,7 @@ export const TOOLS = [
   },
   {
     name: 'get_log_source',
+    annotations: { readOnlyHint: true },
     description:
       'Get one log source in full — including parser_vrl, source_config, match criteria, validated/deployed flags, and timestamps. Use before update_log_source so you edit against the current VRL.',
     inputSchema: {
@@ -58,6 +60,7 @@ export const TOOLS = [
   // ---- Author / validate / test ----------------------------------------
   {
     name: 'validate_vrl',
+    annotations: { readOnlyHint: true },
     description:
       'Compile-check VRL without saving. Returns { valid, errors, diagnostics } where diagnostics carry line/col + a code (e.g. E651, E203). ALWAYS run this until valid before saving. Read the nanosiem://reference/vrl-parsers resource first to avoid the common compiler errors.',
     inputSchema: {
@@ -68,6 +71,7 @@ export const TOOLS = [
   },
   {
     name: 'test_parse_sample',
+    annotations: { readOnlyHint: true },
     description:
       'Run VRL against ONE sample log line and return the parsed output { success, output, extracted_field_count, error }. Inspect `output.udm.*` to confirm fields mapped correctly. Iterate validate_vrl + test_parse_sample until the UDM mapping is right, THEN save.',
     inputSchema: {
@@ -82,6 +86,7 @@ export const TOOLS = [
   },
   {
     name: 'test_parse_live',
+    annotations: { readOnlyHint: true },
     description:
       'Test VRL against real recent events for an already-ingested source_type (pulled from ClickHouse), comparing the new parse against the currently deployed one. Use this when refining a parser for a source_type that is already flowing. Capped at 20 events.',
     inputSchema: {
@@ -189,6 +194,7 @@ export const TOOLS = [
   },
   {
     name: 'get_log_source_health',
+    annotations: { readOnlyHint: true },
     description:
       'Health metrics for a parser: total/24h/last-hour event counts, last_event_at, freshness, parse_errors_24h, and a health_status (healthy | stale | no_data | disabled | error). The honest way to confirm a deploy actually worked.',
     inputSchema: {
@@ -199,6 +205,7 @@ export const TOOLS = [
   },
   {
     name: 'get_log_source_deployments',
+    annotations: { readOnlyHint: true },
     description: 'Deployment history for a parser (deploy/undeploy actions, status, error_message). Use to diagnose a failed or silent deploy.',
     inputSchema: {
       type: 'object' as const,
@@ -209,12 +216,14 @@ export const TOOLS = [
   // ---- Ingress wiring (source configs + routing rules) ------------------
   {
     name: 'list_source_config_types',
+    annotations: { readOnlyHint: true },
     description:
       'List the available ingress transport drivers (HTTP, Kafka, AWS S3, GCP Pub/Sub, Splunk HEC, Vector) with their match_field presets and whether they need credentials. Use to understand how events reach a parser before adding routing rules.',
     inputSchema: { type: 'object' as const, properties: {} },
   },
   {
     name: 'list_source_configs',
+    annotations: { readOnlyHint: true },
     description: 'List configured ingress transports (the connections events arrive on). Each carries routing rules that map events to a parser source_type.',
     inputSchema: {
       type: 'object' as const,
@@ -243,6 +252,7 @@ export const TOOLS = [
   },
   {
     name: 'check_rule_reachability',
+    annotations: { readOnlyHint: true },
     description:
       'Verify a candidate routing rule can actually deliver events to a parser before you create it: checks the source config is enabled + deployed, a parser exists for target_source_type, and (for Kafka) that a broker is reachable. Returns warnings explaining any gap.',
     inputSchema: {
@@ -279,6 +289,7 @@ export const TOOLS = [
   // ---- Parser library (upstream repos) ----------------------------------
   {
     name: 'list_parser_repositories',
+    annotations: { readOnlyHint: true },
     description: 'List connected parser repositories (upstream libraries of prebuilt parsers, e.g. nano-rs/parsers). Returns sync status and parser_count per repo.',
     inputSchema: { type: 'object' as const, properties: {} },
   },
@@ -293,6 +304,7 @@ export const TOOLS = [
   },
   {
     name: 'list_repository_parsers',
+    annotations: { readOnlyHint: true },
     description: 'Browse the prebuilt parsers available in a repository. Returns a summary per parser (path, name, category, vendor/product, whether already imported). Import one with import_parser.',
     inputSchema: {
       type: 'object' as const,

@@ -9,6 +9,7 @@ import { type ToolResult, ok, err } from './utils.js';
 export const TOOLS = [
   {
     name: 'list_detections',
+    annotations: { readOnlyHint: true },
     description:
       'List all detection rules from nano. Returns summary view: id, name, severity, mode, enabled status, match count. Use get_detection for full rule details including query and ai_triage_hints.',
     inputSchema: {
@@ -33,6 +34,7 @@ export const TOOLS = [
   },
   {
     name: 'get_detection',
+    annotations: { readOnlyHint: true },
     description:
       'Get full detection rule details including the nPL query, MITRE ATT&CK mapping, ai_triage_hints (ignore_when/suspicious_when guidance), schedule, and match statistics. Essential for understanding what triggered an alert.',
     inputSchema: {
@@ -48,6 +50,7 @@ export const TOOLS = [
   },
   {
     name: 'get_detection_matches',
+    annotations: { readOnlyHint: true },
     description:
       'Get recent matches for a specific detection rule. Shows what the rule has been catching, including matched events. Useful for assessing rule quality and noise level.',
     inputSchema: {

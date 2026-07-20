@@ -4,6 +4,7 @@ import { type ToolResult, ok, err } from './utils.js';
 export const TOOLS = [
   {
     name: 'list_notebooks',
+    annotations: { readOnlyHint: true },
     description:
       'List investigation notebooks with optional filters. Returns notebooks with owner info and entry counts.',
     inputSchema: {
@@ -31,6 +32,7 @@ export const TOOLS = [
   },
   {
     name: 'get_notebook',
+    annotations: { readOnlyHint: true },
     description:
       'Get a single notebook by ID, including metadata, owner info, and entry count.',
     inputSchema: {
@@ -46,6 +48,7 @@ export const TOOLS = [
   },
   {
     name: 'get_notebook_entries',
+    annotations: { readOnlyHint: true },
     description:
       'Read all entries in a notebook. Returns chronological list of notes, searches, AI suggestions, IOC markers, timeline markers, and other entry types.',
     inputSchema: {
@@ -61,6 +64,7 @@ export const TOOLS = [
   },
   {
     name: 'find_notebooks_by_reference',
+    annotations: { readOnlyHint: true },
     description:
       'Find notebooks that reference a specific entity such as an alert, detection rule, saved search, or case. Useful for discovering related investigations.',
     inputSchema: {

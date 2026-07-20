@@ -4,6 +4,7 @@ import { type ToolResult, ok, err } from './utils.js';
 export const TOOLS = [
   {
     name: 'list_cases',
+    annotations: { readOnlyHint: true },
     description:
       'List cases with optional filters for status, severity, assignee, search text, and tags. Returns paginated case list with alert/entity counts.',
     inputSchema: {
@@ -45,6 +46,7 @@ export const TOOLS = [
   },
   {
     name: 'get_case',
+    annotations: { readOnlyHint: true },
     description:
       'Get full case detail including linked alerts, extracted entities, related cases, and investigation stats.',
     inputSchema: {
@@ -60,6 +62,7 @@ export const TOOLS = [
   },
   {
     name: 'review_case',
+    annotations: { readOnlyHint: true },
     description:
       'Load full investigation context for a case in a single call. Returns the case details, case wall history, and all linked notebooks with their entries. Use this as the FIRST tool call when an analyst wants to review, continue, or investigate an existing case — it loads all prior findings so you can pick up where the investigation left off.',
     inputSchema: {
@@ -75,6 +78,7 @@ export const TOOLS = [
   },
   {
     name: 'get_case_stats',
+    annotations: { readOnlyHint: true },
     description:
       'Get case workload overview: counts by status and severity, average resolution time.',
     inputSchema: {
@@ -84,6 +88,7 @@ export const TOOLS = [
   },
   {
     name: 'get_related_cases',
+    annotations: { readOnlyHint: true },
     description:
       'Find historically similar cases based on shared entities, rules, and MITRE techniques. Useful for identifying patterns and prior investigations.',
     inputSchema: {

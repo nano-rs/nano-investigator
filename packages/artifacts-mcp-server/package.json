@@ -1,0 +1,42 @@
+{
+  "name": "@nano-rs/investigator-artifacts-mcp-server",
+  "version": "0.1.0",
+  "description": "Local static-analysis MCP server for nano Artifacts — exiftool / YARA / olevba / PDF / PE triage run on the analyst's own machine, on a local specimen file",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "bin": {
+    "nano-artifacts": "./dist/index.cjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.7.0"
+  },
+  "keywords": [
+    "nanosiem",
+    "soc",
+    "security",
+    "mcp",
+    "malware",
+    "static-analysis",
+    "exiftool",
+    "yara",
+    "triage"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

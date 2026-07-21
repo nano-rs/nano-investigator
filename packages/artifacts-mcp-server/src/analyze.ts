@@ -56,7 +56,7 @@ const fail = (text: string): ToolResult => ({ content: [{ type: 'text', text }],
 // ── Specimen path resolution + confinement ────────────────────────────────────
 type Resolved = { path: string; size: number };
 
-async function resolveSpecimen(pathArg: unknown): Promise<Resolved | ToolResult> {
+export async function resolveSpecimen(pathArg: unknown): Promise<Resolved | ToolResult> {
   const raw = String(pathArg ?? '').trim();
   if (!raw) return fail('`path` is required — the local specimen file to inspect.');
   let real: string;
@@ -292,6 +292,13 @@ export const TOOLS = [
       'Parse a Windows PE (exe/dll) via python-pefile: imphash, machine, compile timestamp, subsystem, per-section entropy (packing signal), and imported DLLs/functions (capability signal). Use on PE specimens for structure and imphash pivoting.',
     inputSchema: { type: 'object' as const, properties: { ...PATH_PROP }, required: ['path'] },
   },
+  {
+    name: 'run_all',
+    annotations: { readOnlyHint: true },
+    description:
+      "Run the full triage set — filetype, hashes, strings, exiftool, pe_info, olevba, pdfid — in one call and return each tool's output. Use this to get a complete static-analysis pass on a specimen at once.",
+    inputSchema: { type: 'object' as const, properties: { ...PATH_PROP }, required: ['path'] },
+  },
 ];
 
 // ── Dispatch ──────────────────────────────────────────────────────────────────
@@ -314,18 +321,65 @@ export async function handleArtifactTool(
     case 'filetype':
       return filetype(path);
     case 'exiftool':
-      return safeRun('exiftool', ['-g1', '-a', '-u', path], 'install: brew install exiftool');
+      return exiftoolTool(path);
     case 'yara':
       return yara(path, args.rules);
     case 'olevba':
-      return safeRun('olevba', [path], 'install: pip install oletools');
+      return olevbaTool(path);
     case 'pdfid':
-      return safeRun('pdfid', [path], 'install: pip install pdfid (Didier Stevens)');
+      return pdfidTool(path);
     case 'pe_info':
       return peInfo(path);
+    case 'run_all': {
+      const findings = await runAll(path);
+      const text = findings.map((f) => `=== ${f.tool} ===\n${f.output}`).join('\n\n');
+      return ok(text);
+    }
     default:
       return fail(`Unknown artifacts tool: ${name}`);
   }
+}
+
+// ── Named per-tool wrappers so the dispatch and runAll share ONE code path per
+//    tool. exiftool/olevba/pdfid are thin argv-only `safeRun` calls; extracting
+//    them keeps the install hints in a single place.
+async function exiftoolTool(path: string): Promise<ToolResult> {
+  return safeRun('exiftool', ['-g1', '-a', '-u', path], 'install: brew install exiftool');
+}
+
+async function olevbaTool(path: string): Promise<ToolResult> {
+  return safeRun('olevba', [path], 'install: pip install oletools');
+}
+
+async function pdfidTool(path: string): Promise<ToolResult> {
+  return safeRun('pdfid', [path], 'install: pip install pdfid (Didier Stevens)');
+}
+
+// ── Full triage in one pass ───────────────────────────────────────────────────
+/** One finding from {@link runAll}: a tool name, whether it succeeded, and its
+ *  text output (the tool's `content[0].text`). */
+export type ToolFinding = { tool: string; ok: boolean; output: string };
+
+/**
+ * Run the whole static-analysis triage set on an ALREADY-resolved specimen path
+ * and return a structured finding per tool. YARA is intentionally skipped — it
+ * needs external rules. Tools are independent, so they run concurrently.
+ */
+export async function runAll(path: string): Promise<ToolFinding[]> {
+  const jobs: [string, Promise<ToolResult>][] = [
+    ['filetype', filetype(path)],
+    ['hashes', hashes(path)],
+    ['strings', stringsTool(path, 6)],
+    ['exiftool', exiftoolTool(path)],
+    ['pe_info', peInfo(path)],
+    ['olevba', olevbaTool(path)],
+    ['pdfid', pdfidTool(path)],
+  ];
+  const results = await Promise.all(jobs.map(([, p]) => p));
+  return jobs.map(([tool], i) => {
+    const r = results[i];
+    return { tool, ok: !r.isError, output: r.content[0]?.text ?? '' };
+  });
 }
 
 async function capabilities(): Promise<ToolResult> {

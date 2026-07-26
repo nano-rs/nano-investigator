@@ -33,20 +33,20 @@ export function parseRelativeTime(time: string): string {
 // Tool definitions
 // ---------------------------------------------------------------------------
 
-export const TOOLS = [
+const TOOL_DEFINITIONS = [
   {
     name: 'search_sql',
     annotations: { readOnlyHint: true },
     description:
-      'PRIMARY search tool. Run a ClickHouse SQL SELECT against the SIEM log store.\n' +
+      'Advanced search tool. Run a ClickHouse SQL SELECT against the SIEM log store. Prefer `search` (nPL) for normal investigations; use raw SQL only for queries nPL cannot express, such as cross-table joins, prevalence-state aggregates, or direct `ext` JSON access.\n' +
       '\n' +
       'On first use in a session, call `get_schema` to load the UDM column inventory. For canonical query recipes (prevalence lookups, top-N, time bucketing, ASOF identity joins, etc.) read the `nano://sql-guide` resource.\n' +
       '\n' +
       'PERFORMANCE RULES — follow every time:\n' +
-      '  1. PREWHERE holds the timestamp filter plus indexed equality predicates (src_ip, dest_ip, user, source_type, event_type, file_hash, domain). WHERE holds free-text, regex, and complex booleans. The timestamp filter is non-negotiable — without it, ClickHouse cannot prune daily partitions and scans everything:\n' +
-      "       PREWHERE timestamp >= '...' AND timestamp <= '...'\n" +
+      '  1. Use one `WHERE` clause for the timestamp filter and every other predicate. Do not write an explicit `PREWHERE`; ClickHouse moves eligible filters automatically. The timestamp filter is non-negotiable — without it, ClickHouse cannot prune daily partitions and scans everything:\n' +
+      "       WHERE timestamp >= '...' AND timestamp <= '...'\n" +
       "         AND lower(source_type) = lower(\'windows\')\n" +
-      "       WHERE lower(message) iLike \'%logon failure%\'\n" +
+      "         AND lower(message) iLike \'%logon failure%\'\n" +
       '  2. Case-insensitive free-text search: use `lower(field) iLike \'%needle%\'`. Text indexes (splitByNonAlpha tokenizer, granularity 1) on `lower(message)`, `lower(command_line)`, `lower(user)`, `lower(process_name)`, `lower(file_path)`, etc. keep this fast. **Do NOT use `hasToken(...)` for variable-length needles — it silently misses substrings (NAN-1026).**\n' +
       '  3. `lower()` consistency — case-sensitive fields like `source_type` need `lower()` on both sides of the comparison.\n' +
       '  4. **`ext` is a ClickHouse JSON column** — access with `ext.field_name` or `ext[\'field_name\']`, NOT JSONExtract. Use JSONExtract only on the legacy `metadata` String column.\n' +
@@ -57,14 +57,14 @@ export const TOOLS = [
       'TIME RANGE:\n' +
       '  - Both `start_time` and `end_time` are optional; omit both for the last 24h default.\n' +
       '  - Accept relative ("-1h", "-7d", "-30m"), "now", or ISO 8601.\n' +
-      '  - You must STILL include `timestamp >= ? AND timestamp <= ?` (or `BETWEEN`) in PREWHERE — the time params bind the request envelope; the SQL controls partition pruning.\n' +
+      '  - You must STILL include `timestamp >= ? AND timestamp <= ?` (or `BETWEEN`) in the single `WHERE` clause — the time params bind the request envelope; the SQL controls partition pruning.\n' +
       '\n' +
       'EXAMPLE:\n' +
       '  SELECT timestamp, src_ip, user, message\n' +
       '  FROM logs\n' +
-      "  PREWHERE timestamp BETWEEN \'2026-05-25T00:00:00Z\' AND \'2026-05-26T00:00:00Z\'\n" +
+      "  WHERE timestamp BETWEEN \'2026-05-25T00:00:00Z\' AND \'2026-05-26T00:00:00Z\'\n" +
       "    AND lower(source_type) = lower(\'windows\')\n" +
-      "  WHERE lower(message) iLike \'%logon failure%\'\n" +
+      "    AND lower(message) iLike \'%logon failure%\'\n" +
       '  ORDER BY timestamp DESC\n' +
       '  LIMIT 100\n' +
       '\n' +
@@ -74,7 +74,7 @@ export const TOOLS = [
       properties: {
         sql: {
           type: 'string',
-          description: 'The ClickHouse SELECT query. Must include a timestamp filter in PREWHERE for partition pruning.',
+          description: 'The ClickHouse SELECT query. Use one WHERE clause and include a timestamp filter for partition pruning; do not write an explicit PREWHERE.',
         },
         start_time: {
           type: 'string',
@@ -124,12 +124,9 @@ export const TOOLS = [
     name: 'search',
     annotations: { readOnlyHint: true },
     description:
-      'Execute an nPL (nano Pipe Language) query — Splunk-compatible piped syntax — against the SIEM log data.\n' +
+      'PRIMARY search tool. Execute an nPL (nano Pipe Language) query — Splunk-compatible piped syntax — against the SIEM log data. Use this for normal investigations because it is permission-safe, source-scope aware, and covers filters, tables, stats, and timecharts.\n' +
       '\n' +
-      'PREFER `search_sql` for most queries. Use nPL when:\n' +
-      '  - The user explicitly asks for piped / SPL-style syntax\n' +
-      '  - You are translating an existing Splunk SPL query the user pasted in\n' +
-      '  - You want a quick stats/timechart aggregation without writing the SQL\n' +
+      'Use `search_sql` only when nPL cannot express the query, such as a cross-table join, a prevalence-state aggregate, or direct `ext` JSON access.\n' +
       '\n' +
       'Examples:\n' +
       '  - "src_ip=10.0.0.0/8 | stats count by dest_ip, dest_port | sort -count"\n' +
@@ -170,7 +167,7 @@ export const TOOLS = [
     description:
       'Show the compiled SQL that an nPL query would generate without executing it. ' +
       'Useful for understanding what a piped query translates to, debugging unexpected results, ' +
-      'or verifying that the right ClickHouse optimizations (PREWHERE, hasToken, bloom filters) are being applied.',
+      'or verifying that timestamp partition pruning and indexed filters are being applied.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -319,6 +316,16 @@ export const TOOLS = [
     },
   },
 ];
+
+/** Put the safe, source-scoped nPL surface first in MCP tool discovery. */
+export const TOOLS = [...TOOL_DEFINITIONS].sort((left, right) => {
+  const priority = (name: string) => {
+    if (name === 'search') return 0;
+    if (name === 'search_sql') return 2;
+    return 1;
+  };
+  return priority(left.name) - priority(right.name);
+});
 
 // ---------------------------------------------------------------------------
 // Tool handler

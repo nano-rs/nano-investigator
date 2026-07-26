@@ -181,7 +181,7 @@ Accumulates risk on the specified entity field. Multiple risk commands stack.
 nPL does this automatically from the time range you provide. For best performance, use the narrowest time range that answers your question.
 
 ### Use source_type when known
-Source type is in the PREWHERE clause, enabling partition pruning:
+Source type is included with the time predicate, enabling partition pruning:
 \`\`\`
 source_type=windows_security | where event_id=4625
 \`\`\`

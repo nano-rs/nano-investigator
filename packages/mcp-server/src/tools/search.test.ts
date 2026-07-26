@@ -27,13 +27,13 @@ describe('parseRelativeTime', () => {
 });
 
 describe('TOOLS registration', () => {
-  it('lists search_sql before search (SQL is the default surface)', () => {
+  it('lists search before search_sql (nPL is the default surface)', () => {
     const names = TOOLS.map((t) => t.name);
     const sqlIdx = names.indexOf('search_sql');
     const nplIdx = names.indexOf('search');
     expect(sqlIdx).toBeGreaterThanOrEqual(0);
     expect(nplIdx).toBeGreaterThanOrEqual(0);
-    expect(sqlIdx).toBeLessThan(nplIdx);
+    expect(nplIdx).toBeLessThan(sqlIdx);
   });
 
   it('registers get_schema', () => {
@@ -48,16 +48,18 @@ describe('TOOLS registration', () => {
 
   it('search_sql description embeds the perf rules', () => {
     const sql = TOOLS.find((t) => t.name === 'search_sql');
-    expect(sql!.description).toContain('PREWHERE');
+    expect(sql!.description).toContain('one `WHERE` clause');
+    expect(sql!.description).toContain('Do not write an explicit `PREWHERE`');
     expect(sql!.description).toContain('iLike');
     expect(sql!.description).toContain('lower(source_type)');
     expect(sql!.description).toContain('NAN-1026');
     expect(sql!.description).not.toMatch(/hasToken\([^)]*_search/);
   });
 
-  it('search (nPL) description tells the LLM to prefer search_sql', () => {
+  it('search (nPL) description declares the safe default', () => {
     const npl = TOOLS.find((t) => t.name === 'search');
-    expect(npl!.description).toMatch(/PREFER `search_sql`/);
+    expect(npl!.description).toContain('PRIMARY search tool');
+    expect(npl!.description).toContain('Use `search_sql` only when nPL cannot express');
   });
 });
 
@@ -68,7 +70,7 @@ describe('handleSearchTool: search_sql time-range defaulting', () => {
 
     const result = await handleSearchTool(
       'search_sql',
-      { sql: "SELECT * FROM logs PREWHERE timestamp >= '2026-05-25' LIMIT 10" },
+      { sql: "SELECT * FROM logs WHERE timestamp >= '2026-05-25' LIMIT 10" },
       client,
     );
 
@@ -89,7 +91,7 @@ describe('handleSearchTool: search_sql time-range defaulting', () => {
     await handleSearchTool(
       'search_sql',
       {
-        sql: "SELECT * FROM logs PREWHERE timestamp >= '2026-05-25' LIMIT 10",
+        sql: "SELECT * FROM logs WHERE timestamp >= '2026-05-25' LIMIT 10",
         start_time: '2026-05-25T00:00:00Z',
         end_time: '2026-05-26T00:00:00Z',
       },

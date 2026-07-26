@@ -39,14 +39,14 @@ ClickHouse SQL patterns for hunting through the nano SIEM log store. Examples ar
 ## Performance rules
 
 1. **Always filter \`timestamp\`** — enables daily partition pruning. The single biggest perf knob.
-2. **PREWHERE holds time + indexed equality filters.** WHERE holds free-text / regex / complex booleans.
+2. **Use one \`WHERE\` clause.** Put time, indexed equality, free-text, regex, and complex predicates together. Do not write an explicit \`PREWHERE\`; ClickHouse moves eligible filters automatically.
 3. **Free-text search**: \`lower(field) iLike '%needle%'\`. Text indexes (splitByNonAlpha tokenizer, granularity 1) on \`lower(message)\`, \`lower(command_line)\`, \`lower(user)\`, \`lower(process_name)\`, \`lower(file_path)\`, \`lower(parent_command_line)\`, \`lower(src_user)\`, \`lower(dest_user)\` keep this fast.
 4. **\`lower()\` on both sides** of case-insensitive comparisons (esp. \`source_type\`).
 5. **\`ext\` is a ClickHouse JSON column** — \`ext.field\` or \`ext['field']\`, NOT JSONExtract. JSONExtract is only for the legacy \`metadata\` String column.
 6. **Direct UDM column access** — \`src_ip\`, \`process_name\`, \`user\`, \`file_hash\`, etc. are real columns. Never go through \`ext\` for UDM data.
 7. **Always LIMIT.** Backend caps at 100k. Default 100 unless the user asks otherwise.
 
-### PREWHERE-able fields (bloom_filter indexed)
+### Indexed fields
 \`timestamp\`, \`src_ip\`, \`dest_ip\`, \`src_mac\`, \`dest_mac\`, \`user\`, \`src_user\`, \`dest_user\`, \`user_id\`, \`process_name\`, \`process_hash\`, \`process_guid\`, \`command_line\`, \`parent_command_line\`, \`file_hash\`, \`source_type\`, \`event_type\`, \`action\`, \`tags\`.
 
 ---
@@ -58,9 +58,9 @@ ClickHouse SQL patterns for hunting through the nano SIEM log store. Examples ar
 \`\`\`sql
 SELECT timestamp, src_ip, user, message
 FROM logs
-PREWHERE timestamp BETWEEN '2026-05-25T00:00:00Z' AND '2026-05-26T00:00:00Z'
+WHERE timestamp BETWEEN '2026-05-25T00:00:00Z' AND '2026-05-26T00:00:00Z'
   AND lower(source_type) = lower('windows')
-WHERE lower(message) iLike '%logon failure%'
+  AND lower(message) iLike '%logon failure%'
 ORDER BY timestamp DESC
 LIMIT 100;
 \`\`\`
@@ -72,7 +72,7 @@ LIMIT 100;
 \`\`\`sql
 SELECT src_ip, count() AS hits
 FROM logs
-PREWHERE timestamp BETWEEN '2026-05-25T00:00:00Z' AND '2026-05-26T00:00:00Z'
+WHERE timestamp BETWEEN '2026-05-25T00:00:00Z' AND '2026-05-26T00:00:00Z'
 GROUP BY src_ip
 ORDER BY hits DESC
 LIMIT 20;
@@ -87,7 +87,7 @@ SELECT
   toStartOfHour(timestamp) AS hour,
   count() AS event_count
 FROM logs
-PREWHERE timestamp BETWEEN '2026-05-25T00:00:00Z' AND '2026-05-26T00:00:00Z'
+WHERE timestamp BETWEEN '2026-05-25T00:00:00Z' AND '2026-05-26T00:00:00Z'
 GROUP BY hour
 ORDER BY hour;
 \`\`\`
@@ -104,9 +104,9 @@ SELECT
   min(timestamp) AS first_seen,
   max(timestamp) AS last_seen
 FROM logs
-PREWHERE timestamp BETWEEN '2026-05-25T00:00:00Z' AND '2026-05-26T00:00:00Z'
+WHERE timestamp BETWEEN '2026-05-25T00:00:00Z' AND '2026-05-26T00:00:00Z'
   AND lower(source_type) = lower('windows')
-WHERE lower(action) = 'login_failed'
+  AND lower(action) = 'login_failed'
 GROUP BY src_ip, user
 HAVING failures >= 10
 ORDER BY failures DESC
@@ -137,9 +137,9 @@ GROUP BY file_hash;
 \`\`\`sql
 SELECT file_hash, process_name, count() AS hits
 FROM logs
-PREWHERE timestamp BETWEEN '2026-05-25T00:00:00Z' AND '2026-05-26T00:00:00Z'
+WHERE timestamp BETWEEN '2026-05-25T00:00:00Z' AND '2026-05-26T00:00:00Z'
   AND file_hash != ''
-WHERE file_hash IN (
+  AND file_hash IN (
   SELECT file_hash
   FROM hash_prevalence_summary
   WHERE file_hash != ''
@@ -169,9 +169,9 @@ FROM logs AS main
 ASOF LEFT JOIN identity_observations AS i
   ON main.src_ip = i.ip
   AND main.timestamp >= i.observed_at
-PREWHERE main.timestamp BETWEEN '2026-05-25T00:00:00Z' AND '2026-05-26T00:00:00Z'
+WHERE main.timestamp BETWEEN '2026-05-25T00:00:00Z' AND '2026-05-26T00:00:00Z'
   AND main.src_ip != ''
-WHERE i.observed_at IS NULL OR i.observed_at > main.timestamp - INTERVAL 14400 SECOND
+  AND (i.observed_at IS NULL OR i.observed_at > main.timestamp - INTERVAL 14400 SECOND)
 ORDER BY main.timestamp DESC
 LIMIT 100;
 \`\`\`
@@ -191,7 +191,7 @@ SELECT
   s.severity
 FROM logs AS l
 INNER JOIN signals AS s ON l.id = s.event_id
-PREWHERE l.timestamp BETWEEN '2026-05-25T00:00:00Z' AND '2026-05-26T00:00:00Z'
+WHERE l.timestamp BETWEEN '2026-05-25T00:00:00Z' AND '2026-05-26T00:00:00Z'
 ORDER BY l.timestamp DESC
 LIMIT 100;
 \`\`\`
@@ -206,7 +206,7 @@ SELECT
   min(timestamp) AS first_seen,
   count() AS total_events
 FROM logs
-PREWHERE timestamp BETWEEN '2026-05-25T00:00:00Z' AND '2026-05-26T00:00:00Z'
+WHERE timestamp BETWEEN '2026-05-25T00:00:00Z' AND '2026-05-26T00:00:00Z'
 GROUP BY src_ip
 HAVING first_seen >= '2026-05-26T00:00:00Z'
 ORDER BY first_seen ASC
@@ -225,9 +225,9 @@ SELECT
   ext.process_path AS process_path,
   ext['custom.field'] AS custom_field
 FROM logs
-PREWHERE timestamp BETWEEN '2026-05-25T00:00:00Z' AND '2026-05-26T00:00:00Z'
+WHERE timestamp BETWEEN '2026-05-25T00:00:00Z' AND '2026-05-26T00:00:00Z'
   AND lower(source_type) = lower('sysmon')
-WHERE ext.event_id = 1
+  AND ext.event_id = 1
 LIMIT 100;
 \`\`\`
 
@@ -245,8 +245,8 @@ LIMIT 100;
 | \`JSONExtractString(ext, 'foo')\` | \`ext.foo\` or \`ext['foo']\` | \`ext\` is a true JSON column, not a String. JSON column syntax is typed and faster. |
 | \`SUM(host_count)\` on prevalence_summary | \`uniqMerge(host_count)\` | host_count is an HLL state, not an integer. SUM gives garbage. |
 | \`message LIKE 'Error%'\` (case-sensitive) | \`lower(message) iLike 'error%'\` | Production logs vary case constantly. Always normalize. |
-| Free-text in PREWHERE | Put it in WHERE | PREWHERE wants indexed equality predicates. iLike doesn't help granule pruning. |
-| Omitting timestamp filter | \`PREWHERE timestamp BETWEEN ... AND ...\` | Without timestamp, ClickHouse can't prune partitions. Scans everything. |
+| Splitting filters into explicit \`PREWHERE\` + \`WHERE\` clauses | Put every predicate in one \`WHERE\` clause | ClickHouse performs eligible filter movement automatically; one clause avoids invalid or inconsistent generated SQL. |
+| Omitting timestamp filter | \`WHERE timestamp BETWEEN ... AND ...\` | Without timestamp, ClickHouse can't prune partitions. Scans everything. |
 
 ---
 

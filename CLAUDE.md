@@ -14,7 +14,7 @@
 
 - **Always filter by timestamp** — nPL does this automatically from the time range you provide. Use the narrowest range that answers the question.
 - **Discover source types first** — Call `get_source_types` before writing queries that filter on source_type. Never guess or hardcode source type names (e.g. `dns`, `proxy`). The available source types vary per deployment.
-- **Use source_type when known** — Optimizes queries via PREWHERE partition pruning.
+- **Use source_type when known** — Optimizes queries through partition and index pruning.
   ```
   source_type=windows_security | where event_id=4625   ← fast
   event_id=4625                                         ← slow (scans all source types)

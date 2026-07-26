@@ -47,56 +47,84 @@ The server also reads `.env` / `.env.local` files from the working directory.
 
 ## API key permissions
 
-Create an API key in nano with the following scopes. The server only needs view access for most operations, plus limited create/edit access for triage workflows.
+Each tool publishes its exact, versioned requirement in MCP `_meta` under
+`io.nano/permission-requirements`. The tables below are useful key profiles;
+clients should use the tool metadata as the authoritative contract.
 
-### Required — view
+### Investigation baseline
 
 | Permission | What it enables |
 |------------|-----------------|
-| `search:view` | View saved searches |
-| `search:execute` | Execute nPL queries, field stats, asset lookups |
-| `search:save` | Save searches, create shared search links |
-| `log_sources:view` | Search/field discovery enumerates configured log sources and source types |
-| `lookup:view` | Execute nPL searches that reference lookup tables (the `lookup` command) |
+| `search:view` | Read saved searches and the base UDM schema |
+| `search:execute` | Execute and explain nPL, field stats, extended-schema discovery |
+| `log_sources:view` | Inspect log sources and use the parser validation tools |
+| `lookup:view` | Execute nPL searches that use the `lookup` command |
 | `detections:view` | View detection rules, matches, stats |
 | `alerts:view` | List and view alerts |
 | `cases:view` | List and view cases, wall entries, related cases |
-| `enrichments:view` | Entity context, IOC lookups |
-| `prevalence:view` | Prevalence lookups (domain, IP, hash, user, process) |
+| `enrichments:view` | IP enrichment |
+| `prevalence:view` | Prevalence lookups |
 | `notebooks:view` | Read notebooks, entries, references |
-| `risk:view` | Risk scores, entity risk, overview |
-| `mitre:view` | ATT&CK data, coverage |
+| `risk:view` | Risk scores, entity context, activity, and overview |
+| `mitre:view` | ATT&CK data and technique details |
+| `dashboards:view` | Read dashboards and run nPL dashboard panels |
+| `source_configs:view` | Inspect ingress transports and routing |
+| `parser_repositories:view` | Browse the prebuilt-parser catalogue |
 
-### Required — write
+Raw SQL is not part of the baseline. nPL is the primary search surface and works
+with `search:execute`. Grant `search:sql` only for queries nPL cannot express,
+such as cross-table joins, prevalence-state aggregates, or direct `ext` JSON
+access. Raw SQL is also rejected when the API principal is source-scoped, so
+granting the scope does not bypass source isolation.
+
+### Optional — investigation writes
 
 | Permission | What it enables |
 |------------|-----------------|
 | `cases:create` | Create new cases |
-| `cases:edit` | Update case status, add wall entries, manage alerts, merge |
+| `cases:edit` | Edit and merge cases, attach alerts, update non-closed status |
+| `cases:close` | Close or reopen cases |
 | `cases:assign` | Assign cases to analysts |
+| `cases:comment` | Add case wall entries |
 | `notebooks:create` | Create investigation notebooks |
-| `notebooks:edit` | Add entries/references, link to cases, share, update |
+| `notebooks:edit` | Add entries/references and update notebooks |
+| `notebooks:share` | Share notebooks |
+| `search:save` | Save a reusable search |
+| `search:share` | Create a shared-search link |
+| `risk:clear` | Reset one entity's accumulated risk |
+| `dashboards:create` | Create dashboards |
+| `dashboards:edit` | Update dashboards |
 
 ### Optional — log source & parser management
 
-Add these only if you want the assistant to author and deploy log-source parsers — the `list_log_sources` / `create_log_source` / `update_log_source` / `deploy_log_source` / `import_parser` / routing-rule tools. They control what nano ingests and how it's parsed, so grant them only when you want that capability. (Read access — `log_sources:view` — is already in the required view set above.)
+Add these only if you want the assistant to author, route, and deploy ingestion.
+They control what nano ingests and how it is parsed.
 
 | Permission | What it enables |
 |------------|-----------------|
 | `log_sources:create` | Save new parsers as drafts |
-| `log_sources:edit` | Update existing parsers, toggle enabled |
-| `log_sources:deploy` | Deploy / undeploy parsers to Vector |
-| `source_configs:view` | List source configurations and routing rules, check rule reachability |
+| `log_sources:edit` | Update existing parsers |
+| `log_sources:deploy` | Deploy or undeploy parsers |
+| `source_configs:view` | Inspect transports and check rule reachability |
+| `source_configs:create` | Create an ingress transport |
 | `source_configs:edit` | Create and edit routing rules |
-| `parser_repositories:view` | Browse parser repositories and their parsers |
+| `source_configs:deploy` | Deploy or undeploy an ingress transport |
+| `credentials:create` | Store a new transport credential |
+| `credentials:use` | Attach a stored credential to a transport and deploy it |
+| `parser_repositories:view` | Browse parser repositories |
 | `parser_repositories:sync` | Refresh a parser repository |
 | `parser_repositories:import` | Import a prebuilt parser as a draft |
 
-### Not needed
+### Optional — sensitive context
 
-`detections:edit`, `settings:*`, `users:*`, `admin:*`, `dashboards:*`, `log_sources:delete`, `source_configs:create`, `source_configs:delete`, `parser_repositories:manage`
+| Permission | What it enables |
+|------------|-----------------|
+| `settings:ai` | Read organizational context |
+| `audit:view` | Read the audit trail |
 
-Even if the key has broader permissions, the MCP server self-restricts to the tools listed above — it never exposes destructive operations like deleting cases, alerts, or log sources.
+The server exposes no delete tool for cases, alerts, dashboards, log sources, or
+source configurations. Broader key permissions do not create tools that are not
+in the MCP inventory.
 
 ## Verify it works
 
@@ -163,21 +191,24 @@ Claude will call `get_alert_counts` and `health_check` behind the scenes.
 > any credential dumping activity on Windows hosts?
 ```
 
-## Available tools (49)
+## Available tools (84)
 
 The full tool catalog, grouped by category:
 
-### Search (8)
-`search` `search_sql` `explain_query` `get_field_values` `list_saved_searches` `get_saved_search` `save_search` `create_shared_search`
+### Search (9)
+`search` `search_sql` `get_schema` `explain_query` `get_field_values` `list_saved_searches` `get_saved_search` `save_search` `create_shared_search`
 
 ### Alerts (3)
 `list_alerts` `get_alert` `get_alert_counts`
 
-### Cases (10)
-`list_cases` `get_case` `get_case_stats` `get_related_cases` `create_case` `update_case` `change_case_status` `assign_case` `add_alert_to_case` `add_case_wall_entry` `merge_cases`
+### Cases (12)
+`list_cases` `get_case` `review_case` `get_case_stats` `get_related_cases` `create_case` `update_case` `change_case_status` `assign_case` `add_alert_to_case` `add_case_wall_entry` `merge_cases`
 
-### Notebooks (8)
+### Notebooks (9)
 `list_notebooks` `get_notebook` `get_notebook_entries` `find_notebooks_by_reference` `create_notebook` `add_notebook_entry` `add_notebook_reference` `update_notebook` `share_notebook`
+
+### Dashboards (7)
+`get_dashboard_schema` `validate_dashboard` `dashboard_panel_query` `list_dashboards` `get_dashboard` `create_dashboard` `update_dashboard`
 
 ### Detections (3)
 `list_detections` `get_detection` `get_detection_matches`
@@ -185,20 +216,23 @@ The full tool catalog, grouped by category:
 ### Prevalence (3)
 `get_prevalence` `get_rare_artifacts` `get_new_artifacts`
 
-### Risk (3)
-`get_risky_entities` `get_risk_overview` `get_entity_risk_timeline`
+### Risk (5)
+`get_risky_entities` `get_risk_overview` `get_entity_risk_timeline` `get_entity_risk_activity` `reset_entity_risk`
 
-### Enrichment (3)
-`get_entity_context` `lookup_ip` `lookup_ioc`
+### Enrichment (2)
+`get_entity_context` `lookup_ip`
 
 ### MITRE ATT&CK (2)
 `get_mitre_technique` `get_mitre_coverage`
 
-### System (3)
-`get_source_types` `get_org_context` `health_check`
+### System (4)
+`get_source_types` `get_org_context` `health_check` `get_audit_trail`
 
-### Audit (1)
-`get_audit_trail`
+### Parser authoring & ingestion (21)
+`list_log_sources` `get_log_source` `validate_vrl` `test_parse_sample` `test_parse_live` `create_log_source` `update_log_source` `deploy_log_source` `undeploy_log_source` `get_log_source_health` `get_log_source_deployments` `list_source_config_types` `list_source_configs` `create_routing_rule` `check_rule_reachability` `deploy_source_config` `undeploy_source_config` `list_parser_repositories` `sync_parser_repository` `list_repository_parsers` `import_parser`
+
+### Guided onboarding (4)
+`onboarding_requirements` `import_credential_from_file` `create_credential` `create_source_config`
 
 ## Resources & prompts
 

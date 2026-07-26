@@ -16,7 +16,7 @@ export const UDM_SCHEMA_CONTENT = `# nano UDM Field Reference
 
 ## Core Fields (always available)
 - **timestamp** (DateTime) — Event timestamp. Always filter on this for partition pruning.
-- **source_type** (String) — Log source identifier (e.g., "windows_security", "sysmon", "firewall_paloalto"). Use in queries for PREWHERE optimization.
+- **source_type** (String) — Log source identifier (e.g., "windows_security", "sysmon", "firewall_paloalto"). Include it in the query's single WHERE clause for partition and index pruning.
 - **message** (String) — Raw log message. Search via \`lower(message) iLike '%term%'\` (text indexes with splitByNonAlpha tokenizer keep this fast).
 - **event_type** (String) — Normalized event type.
 - **action** (String) — Action performed (e.g., "login_failed", "file_created", "connection_established").

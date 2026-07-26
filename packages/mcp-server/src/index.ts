@@ -82,6 +82,7 @@ import { TOOLS as MITRE_TOOLS, handleMitreTool } from './tools/mitre.js';
 import { TOOLS as SYSTEM_TOOLS, handleSystemTool } from './tools/system.js';
 import { TOOLS as PARSERS_TOOLS, handleParsersTool } from './tools/parsers.js';
 import { TOOLS as ONBOARDING_TOOLS, handleOnboardingTool } from './tools/onboarding.js';
+import { withPermissionRequirements } from './tool-permissions.js';
 
 // Resources
 import { UDM_SCHEMA_RESOURCE, UDM_SCHEMA_CONTENT, UDM_SCHEMA_URI } from './resources/udm-schema.js';
@@ -98,7 +99,7 @@ import { BUILD_PARSER_PROMPT, getBuildParserPrompt } from './prompts/build-parse
 
 // ==================== Tool Registry ====================
 
-const ALL_TOOLS = [
+const ALL_TOOLS = withPermissionRequirements([
   ...SEARCH_TOOLS,
   ...ALERTS_TOOLS,
   ...CASES_TOOLS,
@@ -112,7 +113,7 @@ const ALL_TOOLS = [
   ...SYSTEM_TOOLS,
   ...PARSERS_TOOLS,
   ...ONBOARDING_TOOLS,
-];
+]);
 
 // Map tool names to their category handler
 const SEARCH_TOOL_NAMES = new Set(SEARCH_TOOLS.map((t) => t.name));
@@ -160,7 +161,7 @@ function getClient(): NanosiemClient {
 const server = new Server(
   {
     name: 'nano-investigator',
-    version: '0.1.0',
+    version: '0.1.8',
   },
   {
     capabilities: {

@@ -366,6 +366,16 @@ export interface LinkNotebookRequest {
   notebook_id: string;
 }
 
+/** Merge a standalone notebook into the case's own notebook. */
+export interface MergeNotebookIntoCaseRequest {
+  source_notebook_id: string;
+}
+
+export interface MergeNotebookIntoCaseResponse {
+  message: string;
+  entries_merged: number;
+}
+
 // ============================================================================
 // Notebook Types
 // ============================================================================

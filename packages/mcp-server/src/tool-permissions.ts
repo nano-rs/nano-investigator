@@ -95,6 +95,9 @@ export const TOOL_PERMISSION_REQUIREMENTS: Record<
   add_alert_to_case: allOf('cases:edit', 'alerts:view'),
   add_case_wall_entry: allOf('cases:comment'),
   merge_cases: allOf('cases:edit'),
+  // Reads the case's notebook to pick the merge-vs-link path, then takes the
+  // composite both case-side notebook mutations require.
+  merge_notebook_into_case: allOf('cases:view', 'cases:edit', 'notebooks:edit'),
 
   // Notebooks
   list_notebooks: allOf('notebooks:view'),

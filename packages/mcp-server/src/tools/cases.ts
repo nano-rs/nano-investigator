@@ -241,7 +241,11 @@ export const TOOLS = [
   {
     name: 'add_case_wall_entry',
     description:
-      'Add an investigation finding, comment, or action record to the case wall. The case wall is the chronological log of investigation activity.',
+      'Post a SHORT status update (1-3 plain sentences) to the case wall — the chronological activity log. ' +
+      'The wall is not where investigation output goes: do NOT post detailed findings, markdown tables, ' +
+      'timelines, or long analysis here. Those belong in the case notebook. ' +
+      'To move accumulated investigation notes onto a case ("merge/attach/save my notes to case X"), ' +
+      'use merge_notebook_into_case instead of this tool.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -264,6 +268,35 @@ export const TOOLS = [
         },
       },
       required: ['case_id', 'entry_type', 'content'],
+    },
+  },
+  {
+    name: 'merge_notebook_into_case',
+    description:
+      'Move an investigation notebook onto a case: every entry in the source notebook is copied into ' +
+      "the case's own notebook, and the source is archived as `merged`. " +
+      'This is the tool for "merge/attach/save these notes into case X" — the notes land in the case ' +
+      'notebook where investigation output belongs, NOT on the case wall (see add_case_wall_entry). ' +
+      'If the case has no notebook yet, the source notebook BECOMES the case notebook instead, which ' +
+      'keeps its entries in place but also makes it visible to everyone who can see the case — say so ' +
+      'when reporting the result, because a private notebook stops being private. ' +
+      'Returns `active_notebook_id` — the notebook the investigation continues in. A client recording ' +
+      'session notes MUST switch to that id afterwards: the archived source stays writable, so entries ' +
+      'added to it after the merge are silently orphaned from the case.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        case_id: {
+          type: 'string',
+          description: 'ID of the case to merge the notes into',
+        },
+        source_notebook_id: {
+          type: 'string',
+          description:
+            'ID of the notebook to merge (e.g. the current session notebook). Must not itself be a case notebook.',
+        },
+      },
+      required: ['case_id', 'source_notebook_id'],
     },
   },
   {
@@ -452,6 +485,57 @@ export async function handleCasesTool(
       });
       if (!res.success) return err(`Failed to add wall entry to case ${caseId}: ${res.error?.message}`);
       return ok(res.data);
+    }
+
+    case 'merge_notebook_into_case': {
+      const caseId = args.case_id as string;
+      const sourceNotebookId = args.source_notebook_id as string;
+      if (!caseId) return err('Missing required argument: case_id');
+      if (!sourceNotebookId) return err('Missing required argument: source_notebook_id');
+
+      // A case with no notebook has nothing to merge into, and the merge endpoint
+      // rejects that with the same 404 it uses for an invisible case. Ask first so
+      // the two are distinguishable and the empty case can be served by linking.
+      const existing = await client.getCaseNotebook(caseId);
+      if (!existing.success) {
+        return err(`Failed to resolve notebook for case ${caseId}: ${existing.error?.message}`);
+      }
+
+      if (!existing.data) {
+        const linked = await client.linkNotebookToCase(caseId, {
+          notebook_id: sourceNotebookId,
+        });
+        if (!linked.success) {
+          return err(`Failed to link notebook to case ${caseId}: ${linked.error?.message}`);
+        }
+        // No `entries_merged` here on purpose: nothing was copied, and reporting
+        // a count of 0 alongside a success reads as "merged nothing".
+        return ok({
+          action: 'linked',
+          case_id: caseId,
+          source_notebook_id: sourceNotebookId,
+          active_notebook_id: sourceNotebookId,
+          message:
+            'The case had no notebook, so this notebook IS now the case notebook — every entry is intact and in place, nothing was copied or archived. Note it is no longer private: a case notebook is visible to everyone who can see the case.',
+        });
+      }
+
+      const merged = await client.mergeNotebookIntoCase(caseId, {
+        source_notebook_id: sourceNotebookId,
+      });
+      if (!merged.success) {
+        return err(`Failed to merge notebook into case ${caseId}: ${merged.error?.message}`);
+      }
+
+      return ok({
+        action: 'merged',
+        case_id: caseId,
+        source_notebook_id: sourceNotebookId,
+        active_notebook_id: existing.data.id,
+        entries_merged: merged.data?.entries_merged ?? 0,
+        message:
+          'Entries were copied into the case notebook and the source notebook was archived as `merged`. Continue recording in active_notebook_id — the archive still accepts writes, but they no longer reach the case.',
+      });
     }
 
     case 'merge_cases': {

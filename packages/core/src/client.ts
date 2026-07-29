@@ -36,6 +36,8 @@ import type {
   ChangeCaseStatusRequest,
   MergeCasesRequest,
   LinkNotebookRequest,
+  MergeNotebookIntoCaseRequest,
+  MergeNotebookIntoCaseResponse,
   CaseWithDetails,
   // Notebooks
   NotebookWithOwner,
@@ -354,6 +356,34 @@ export class NanosiemClient {
 
   async linkNotebookToCase(caseId: string, req: LinkNotebookRequest): Promise<ApiResponse<void>> {
     return this.request<void>('POST', `/api/cases/${this.encodeId(caseId)}/notebook`, req);
+  }
+
+  /**
+   * The case's own notebook, or `null` when the case has none yet. A missing
+   * notebook is a 200 with a null body — a 404 here means the case itself is
+   * not visible.
+   */
+  async getCaseNotebook(caseId: string): Promise<ApiResponse<NotebookWithOwner | null>> {
+    return this.request<NotebookWithOwner | null>(
+      'GET',
+      `/api/cases/${this.encodeId(caseId)}/notebook`,
+    );
+  }
+
+  /**
+   * Move every entry out of a standalone notebook into the case's notebook.
+   * The source is archived as `merged`. Requires the case to already have a
+   * notebook — see `getCaseNotebook` / `linkNotebookToCase` for the empty case.
+   */
+  async mergeNotebookIntoCase(
+    caseId: string,
+    req: MergeNotebookIntoCaseRequest,
+  ): Promise<ApiResponse<MergeNotebookIntoCaseResponse>> {
+    return this.request<MergeNotebookIntoCaseResponse>(
+      'POST',
+      `/api/cases/${this.encodeId(caseId)}/notebook/merge`,
+      req,
+    );
   }
 
   // ==================== Notebooks (→ api) ====================

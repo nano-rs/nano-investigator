@@ -82,6 +82,7 @@ import { TOOLS as MITRE_TOOLS, handleMitreTool } from './tools/mitre.js';
 import { TOOLS as SYSTEM_TOOLS, handleSystemTool } from './tools/system.js';
 import { TOOLS as PARSERS_TOOLS, handleParsersTool } from './tools/parsers.js';
 import { TOOLS as ONBOARDING_TOOLS, handleOnboardingTool } from './tools/onboarding.js';
+import { TOOLS as RECON_TOOLS, handleReconTool } from './tools/recon.js';
 import { withPermissionRequirements } from './tool-permissions.js';
 
 // Resources
@@ -113,6 +114,7 @@ const ALL_TOOLS = withPermissionRequirements([
   ...SYSTEM_TOOLS,
   ...PARSERS_TOOLS,
   ...ONBOARDING_TOOLS,
+  ...RECON_TOOLS,
 ]);
 
 // Map tool names to their category handler
@@ -129,6 +131,7 @@ const MITRE_TOOL_NAMES = new Set(MITRE_TOOLS.map((t) => t.name));
 const SYSTEM_TOOL_NAMES = new Set(SYSTEM_TOOLS.map((t) => t.name));
 const PARSERS_TOOL_NAMES = new Set(PARSERS_TOOLS.map((t) => t.name));
 const ONBOARDING_TOOL_NAMES = new Set(ONBOARDING_TOOLS.map((t) => t.name));
+const RECON_TOOL_NAMES = new Set(RECON_TOOLS.map((t) => t.name));
 
 // ==================== Client Setup ====================
 
@@ -196,6 +199,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (SYSTEM_TOOL_NAMES.has(name)) return handleSystemTool(name, toolArgs, client);
   if (PARSERS_TOOL_NAMES.has(name)) return handleParsersTool(name, toolArgs, client);
   if (ONBOARDING_TOOL_NAMES.has(name)) return handleOnboardingTool(name, toolArgs, client);
+  if (RECON_TOOL_NAMES.has(name)) return handleReconTool(name, toolArgs, client);
 
   return {
     content: [{ type: 'text', text: `Unknown tool: ${name}` }],

@@ -40,6 +40,23 @@ const alternatives = (
 
 const permissionless = allOf();
 
+/** Either recon write scope admits; see the Recon block below. */
+const reconWrite = (
+  tools: string[],
+): Record<string, ToolPermissionRequirements> =>
+  Object.fromEntries(
+    tools.map((tool) => [
+      tool,
+      alternatives(
+        { allOf: ['hunts:profile_write'], when: 'the narrow recon write scope' },
+        {
+          allOf: ['hunts:manage'],
+          when: 'sessions provisioned before hunts:profile_write existed',
+        },
+      ),
+    ]),
+  );
+
 /**
  * The authoritative permission contract for every tool exposed by this server.
  *
@@ -231,18 +248,29 @@ export const TOOL_PERMISSION_REQUIREMENTS: Record<
 
   // Recon (NAN-2238)
   //
-  // All four take `hunts:manage`, which is the gate on recon as a whole:
-  // `hunts:view` is authority to READ a stored profile, while recon reads
-  // across the whole log estate and ends by creating hunt definitions — and
-  // creating hunt definitions is what `hunts:manage` is. It is also the gate
-  // the Profile page's own "Run recon" control checks before offering the
-  // action, so declaring less here would advertise a step of the flow that 403s
-  // partway through. `hunts:run` is deliberately NOT required: nothing in this
-  // flow schedules or starts anything.
-  hunt_build_census: allOf('hunts:manage'),
-  hunt_huntable_surface: allOf('hunts:manage'),
-  hunt_save_profile: allOf('hunts:manage'),
-  hunt_propose_drafts: allOf('hunts:manage'),
+  // All four take a recon WRITE scope. `hunts:view` is authority to READ a
+  // stored profile, while recon reads across the whole log estate and ends by
+  // writing a profile and creating hunt definitions. `hunts:run` is
+  // deliberately NOT required: nothing in this flow schedules or starts
+  // anything.
+  //
+  // Two alternatives, and the ORDER matters — a client rendering "what this
+  // tool needs" should show the narrow scope first. `hunts:profile_write`
+  // (nanosiem migration 9000060) authorizes exactly these five endpoints;
+  // `hunts:manage` also archives and edits hunts and is accepted only so that
+  // sessions provisioned before that migration keep working. Declaring only
+  // `hunts:manage` would tell an operator who already holds the narrow scope
+  // that they need the broad one — which is how a deliberately narrowed agent
+  // key gets widened back.
+  //
+  // Flattening these into one `allOf` would be wrong in the other direction: it
+  // would claim a call needs BOTH.
+  ...reconWrite([
+    'hunt_build_census',
+    'hunt_huntable_surface',
+    'hunt_save_profile',
+    'hunt_propose_drafts',
+  ]),
 };
 
 type ToolDefinition = {

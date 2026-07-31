@@ -648,7 +648,7 @@ function describeError(
     return `${message} — this nano deployment does not expose the recon endpoints. Recon cannot be driven here; say so rather than working around it.`;
   }
   if (error?.code === 'HTTP_403') {
-    return `${message} — recon requires the \`hunts:manage\` permission. Report that the key lacks it rather than retrying.`;
+    return `${message} — recon requires the \`hunts:profile_write\` permission (\`hunts:manage\` is also accepted). Report that the key lacks it rather than retrying.`;
   }
   return message;
 }

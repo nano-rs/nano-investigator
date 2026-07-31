@@ -27,16 +27,26 @@
  *   trail:      {"kind":"trail","at":"<ISO-8601>","note":…}   ← discriminator "kind"
  *   knowledge:  {"kind":"knowledge","category":…,"subject":…,"fact":…,
  *                "confidence":<number>,"evidence_event_ids":[…],"ttl_days":<number>}
+ *   suppression:{"kind":"suppression","fingerprint":…,"reason":…,"ttl_days":<number>}
  * One JSON object per line, appended and flushed per call. A reader treats any line
  * without `kind` as a lead.
  *
- * WHY KNOWLEDGE COMES OUT THE SAME PIPE: recording a fact server-side needs
- * `hunts:report`, and the sweep agent must never hold it — the desktop's
- * AGENT_KEY_FORBIDDEN says so, because this agent has attacker-authored log content
- * in its context. So the agent writes a line here, exactly like a lead, and the
- * runner — which does hold `hunts:report` — submits it to POST /api/hunts/knowledge
- * afterwards. The sweep id is deliberately NOT a tool argument: the runner knows
- * which lease it holds, and an agent-supplied one would be the agent asserting that.
+ * WHY KNOWLEDGE AND SUPPRESSION COME OUT THE SAME PIPE: recording either one
+ * server-side needs `hunts:report`, and the sweep agent must never hold it — the
+ * desktop's AGENT_KEY_FORBIDDEN says so, because this agent has attacker-authored
+ * log content in its context. So the agent writes a line here, exactly like a lead,
+ * and the runner — which does hold `hunts:report` — submits it to
+ * POST /api/hunts/knowledge or POST /api/hunts/suppressions afterwards. The sweep id
+ * is deliberately NOT a tool argument: the runner knows which lease it holds, and an
+ * agent-supplied one would be the agent asserting that.
+ *
+ * WHY A SUPPRESSION IS STILL SAFE TO WRITE FROM HERE. Suppression is the one thing
+ * on this surface an unattended agent must not be handed carelessly — a process that
+ * can suppress can blind its own successors. Three properties keep it bounded, and
+ * all three live outside this file: the agent can only ever name ONE fingerprint it
+ * was already given (there is no entity form, no hunt-wide form, no playbook form
+ * reachable from here); a suppression ZEROES a lead's score without hiding the lead,
+ * so an analyst still sees it, flagged, with the reason attached; and it expires.
  */
 
 import { constants } from 'node:fs';
@@ -75,6 +85,21 @@ export const CAPS = {
   // Mirrors the server's MAX_TTL_DAYS. The server clamps regardless — this is here
   // so an agent asking for "permanent" learns immediately that nothing is.
   KNOWLEDGE_TTL_DAYS: 90,
+  // Suppression. The fingerprint is a SERVER-DERIVED identifier of a fixed width, so
+  // it is checked for shape and never truncated — a cut fingerprint either matches
+  // nothing, which wastes the call, or matches something else, which is worse.
+  SUPPRESSION_FINGERPRINT: 32, // nanosiem's FINGERPRINT_HEX_LEN — 32 hex chars
+  // Prose, so truncated rather than rejected: an unexplained suppression is
+  // unreviewable, and losing the reason's last clause beats losing the whole call.
+  SUPPRESSION_REASON: 1000,
+  // A reason shorter than this is almost certainly "noisy" or "benign" — a verdict
+  // with no working shown. Warned about, not rejected, because the agent may have
+  // been terse about something it genuinely established.
+  SUPPRESSION_REASON_THIN: 40,
+  // DELIBERATELY far shorter than a fact's 90. The asymmetry is the point: a wrong
+  // fact costs a later sweep a bad prior it can check, a wrong suppression costs it
+  // the finding. A short leash means a mistake self-repairs in weeks, not quarters.
+  SUPPRESSION_TTL_DAYS: 30,
   RECORDS_PER_PROCESS: 1000,
   FILE_BYTES: 16 * 1024 * 1024,
 } as const;
@@ -100,6 +125,16 @@ const MITRE_RE = /^T\d{4}(\.\d{3})?$/;
  *  paragraph of injected prose must not become a UI grouping header, and silently
  *  deleting characters would map two distinct categories onto one identity. */
 const KNOWLEDGE_CATEGORY_RE = /^[a-z0-9][a-z0-9_-]*$/;
+
+/** A lead fingerprint as the server derives it: 32 lowercase hex chars.
+ *
+ *  Checked here so an agent that INVENTED one — or pasted an entity name, or a
+ *  sentence — is told immediately rather than having the runner's submission
+ *  rejected an hour later with nobody reading the log. The shape check is not the
+ *  control that makes suppression safe (a random 32-hex string still parses); the
+ *  server matching the fingerprint against a lead this sweep actually produced is.
+ *  It is here because a malformed identifier is a bug the agent can still fix. */
+const FINGERPRINT_RE = /^[0-9a-f]{32}$/;
 
 const LEADS_ENV = 'NANO_HUNT_LEADS_FILE';
 
@@ -391,6 +426,35 @@ export const TOOLS = [
       required: ['category', 'subject', 'fact'],
     },
   },
+  {
+    name: 'record_suppression',
+    description:
+      'Suppress ONE lead you have ESTABLISHED is benign, and say why. Use it only when you have done the work and can state the explanation: what the pattern is, what actually causes it, and over what period you confirmed it. If you are recording this because a lead looks noisy, repetitive or boring rather than because you understand it, do not — record_knowledge is where an unproven observation belongs, and an unsure lead stays a lead. ' +
+      'WHAT IT ACTUALLY DOES: it ZEROES THE LEAD\'S SCORE. IT DOES NOT HIDE THE LEAD. An analyst still sees it on the bench, flagged as agent-suppressed, and reads your reason as the justification for why it scored zero — so write the reason for that analyst, not for yourself. A suppression you cannot justify is a suppression that gets revoked and held against every other conclusion in this sweep. ' +
+      'It also EXPIRES, and it is narrow: it applies to this ONE fingerprint. There is deliberately no way from here to suppress an entity, a hunt or a pattern — an unattended sweep that could suppress broadly could blind its own successors, so it cannot. ' +
+      '`fingerprint` MUST be a fingerprint you were given back when you recorded that lead — copy it exactly. NEVER compose, guess or derive one: fingerprints are computed by the server from evidence it resolved itself, so a fingerprint you made up would either match nothing or suppress a finding you never saw. If you do not have the fingerprint of the lead in front of you, you cannot suppress it — record_knowledge instead. ' +
+      '`reason` is required and is the whole point: an unexplained suppression is unreviewable, which defeats the visibility this is built on. "noisy" is not a reason. "the 03:00 spike on svc_backup is the nightly job, confirmed across 90 days of the same schedule and the same parent process" is. ' +
+      'Each call appends one line to the sweep\'s local file, exactly like record_lead. Nothing is sent anywhere: the hunt runner submits it after the sweep and stamps which sweep this was — you do not name it. ' +
+      `Caps: fingerprint exactly ${CAPS.SUPPRESSION_FINGERPRINT} hex characters (rejected otherwise); reason ≤${CAPS.SUPPRESSION_REASON} chars (truncated, not rejected) with newlines collapsed to spaces; ttl_days capped at ${CAPS.SUPPRESSION_TTL_DAYS}; ≤${CAPS.RECORDS_PER_PROCESS} records per sweep, shared with record_lead, note_trail and record_knowledge.`,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        fingerprint: {
+          type: 'string',
+          description: `The server-derived fingerprint of the lead you are suppressing, exactly as it was returned to you when you recorded it — ${CAPS.SUPPRESSION_FINGERPRINT} hex characters. Copy it; never compose one. A fingerprint you did not receive names a lead you never saw.`,
+        },
+        reason: {
+          type: 'string',
+          description: `Why this is benign, written for the analyst who will read it next to the lead: what the pattern is, what causes it, and how long you confirmed it holds. Required — this is the record of your reasoning, and it is what a reviewer uses to keep or revoke the suppression. Whitespace and newlines collapse to single spaces. ≤${CAPS.SUPPRESSION_REASON} chars (longer is truncated).`,
+        },
+        ttl_days: {
+          type: 'number',
+          description: `How long the suppression should hold before the lead scores normally again. Optional; omit it for the server's short default. Capped at ${CAPS.SUPPRESSION_TTL_DAYS} days — nothing you suppress here stays suppressed indefinitely, and asking for less is right whenever the estate changes.`,
+        },
+      },
+      required: ['fingerprint', 'reason'],
+    },
+  },
 ];
 
 // ── Handlers ─────────────────────────────────────────────────────────────────
@@ -635,6 +699,97 @@ async function recordKnowledge(args: Record<string, unknown>): Promise<ToolResul
   });
 }
 
+async function recordSuppression(args: Record<string, unknown>): Promise<ToolResult> {
+  // Case-folded before the shape check: hex carries no case, so an uppercase
+  // fingerprint is the same identifier and refusing it would be pedantry. Nothing
+  // else about it is rewritten — a fingerprint is an identifier, so it is accepted
+  // exactly or refused, never repaired into a different one.
+  const fingerprint = (asString(args.fingerprint) ?? '').toLowerCase();
+  if (!fingerprint) {
+    return err(
+      '`fingerprint` is required — the fingerprint of the lead you are suppressing, exactly as it was returned to you when you recorded that lead. If you do not have one, you are not suppressing a lead you saw; record_knowledge is where an observation you cannot tie to a lead belongs.',
+    );
+  }
+  if (!FINGERPRINT_RE.test(fingerprint)) {
+    return err(
+      `\`fingerprint\` must be exactly ${CAPS.SUPPRESSION_FINGERPRINT} hex characters (got "${fingerprint.slice(0, 80)}"). Fingerprints are derived by the server from evidence it resolved itself — copy the one you were given for that lead. Composing, guessing or deriving one names a lead you never saw, so it is refused rather than cleaned up.`,
+    );
+  }
+
+  const warnings: string[] = [];
+
+  // Collapsed BEFORE the cap, like a fact: the reason is rendered on one row beside
+  // the lead it zeroed, and the cap should count the justification rather than the
+  // whitespace somebody padded it with.
+  let reason = collapse(asString(args.reason) ?? '');
+  if (!reason) {
+    return err(
+      '`reason` is required — an unexplained suppression is unreviewable, which is the whole thing this is built to avoid. State what the pattern is, what causes it, and over what period you confirmed it.',
+    );
+  }
+  if (reason.length > CAPS.SUPPRESSION_REASON) {
+    reason = `${cut(reason, CAPS.SUPPRESSION_REASON)}… [truncated at ${CAPS.SUPPRESSION_REASON} chars]`;
+    warnings.push(`reason truncated at ${CAPS.SUPPRESSION_REASON} chars.`);
+  }
+  // Warned, not rejected: the agent may be terse about something it genuinely
+  // established, and losing the suppression would not improve the reason. But a
+  // one-word verdict is what a reviewer revokes, so say so while it can be fixed.
+  if (reason.length < CAPS.SUPPRESSION_REASON_THIN) {
+    warnings.push(
+      `The reason is only ${reason.length} characters. An analyst reads it as the entire justification for a lead scoring zero — a verdict with no working shown ("noisy", "benign", "expected") is what gets a suppression revoked. Say what causes the pattern and over what period you confirmed it.`,
+    );
+  }
+
+  // Clamped rather than rejected, exactly as a fact's ttl is: a shorter suppression
+  // asserts nothing false, and expiry is the main thing bounding one that was wrong.
+  let ttlDays: number | undefined;
+  if (args.ttl_days !== undefined && args.ttl_days !== null) {
+    const value = asFiniteNumber(args.ttl_days);
+    if (value === null || value < 1) {
+      return err(
+        `\`ttl_days\` must be a whole number of days of 1 or more (capped at ${CAPS.SUPPRESSION_TTL_DAYS}). Omit it to accept the server's short default.`,
+      );
+    }
+    const requested = Math.round(value);
+    ttlDays = Math.min(requested, CAPS.SUPPRESSION_TTL_DAYS);
+    if (ttlDays !== requested) {
+      warnings.push(
+        `ttl_days capped at ${CAPS.SUPPRESSION_TTL_DAYS} days — a suppression written by an unattended sweep is deliberately short-lived, so re-establish it next time if it still holds.`,
+      );
+    }
+  }
+
+  // Key order below IS the file contract; do not reorder.
+  const record: Record<string, unknown> = { kind: 'suppression', fingerprint, reason };
+  if (ttlDays !== undefined) record.ttl_days = ttlDays;
+
+  return serialised(async () => {
+    if (recordsWritten >= CAPS.RECORDS_PER_PROCESS) {
+      return err(
+        `This sweep has already recorded ${CAPS.RECORDS_PER_PROCESS} records — the cap. Stop recording and summarise what you have.`,
+      );
+    }
+    const file = await resolveLeadsFile();
+    if (isToolResult(file)) return file;
+
+    try {
+      await appendLine(file.path, JSON.stringify(record));
+    } catch (e) {
+      return err(`Could not write the suppression: ${writeFailure(e)}`);
+    }
+    recordsWritten += 1;
+
+    return ok({
+      recorded: true,
+      kind: 'suppression',
+      fingerprint,
+      records_this_sweep: recordsWritten,
+      leads_file: file.path,
+      ...(warnings.length ? { warnings } : {}),
+    });
+  });
+}
+
 export async function handleHuntTool(
   name: string,
   args: Record<string, unknown>,
@@ -646,6 +801,8 @@ export async function handleHuntTool(
       return noteTrail(args);
     case 'record_knowledge':
       return recordKnowledge(args);
+    case 'record_suppression':
+      return recordSuppression(args);
     default:
       return err(`Unknown hunt tool: ${name}`);
   }

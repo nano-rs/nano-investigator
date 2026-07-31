@@ -1,7 +1,7 @@
 {
   "name": "@nano-rs/investigator-hunt-mcp-server",
-  "version": "0.1.1",
-  "description": "Local hunt MCP server for nano — an unattended hunt sweep records leads to an append-only JSONL file on the analyst's own machine",
+  "version": "0.1.2",
+  "description": "Local hunt MCP server for nano — an unattended hunt sweep records leads, breadcrumbs and learned knowledge to an append-only JSONL file on the analyst's own machine",
   "type": "module",
   "main": "./dist/index.cjs",
   "bin": {

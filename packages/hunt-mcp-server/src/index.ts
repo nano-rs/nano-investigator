@@ -5,6 +5,9 @@
  * it finds something worth an analyst's attention; each call appends one JSONL line
  * to the file named by NANO_HUNT_LEADS_FILE, flushed immediately. A sweep killed at
  * turn 30 keeps every lead it had already recorded — partial capture is the point.
+ * `note_trail` and `record_knowledge` write to the same file, discriminated by a
+ * `kind` — knowledge goes out this way rather than to the API because recording it
+ * server-side needs `hunts:report`, which this agent must never hold.
  *
  * Deliberately minimal and self-contained, modelled on nano-recon / nano-artifacts:
  * NO nano API client, NO API key, NO network, NO subprocesses, NO file reads. It
@@ -44,7 +47,7 @@ async function main(): Promise<void> {
   console.error(
     process.env.NANO_HUNT_LEADS_FILE
       ? `Leads file: ${process.env.NANO_HUNT_LEADS_FILE}`
-      : 'NANO_HUNT_LEADS_FILE is NOT set — every record_lead / note_trail call will fail.'
+      : 'NANO_HUNT_LEADS_FILE is NOT set — every record_lead / note_trail / record_knowledge call will fail.'
   );
 }
 

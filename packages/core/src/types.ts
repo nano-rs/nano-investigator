@@ -1395,11 +1395,21 @@ export interface HuntActorWeight {
  * caller choose who may read what it wrote.
  */
 export interface SaveHuntProfileRequest {
-  /** The ROWS, from `CensusReport.census` — not the report envelope. */
-  census: unknown;
+  /**
+   * OPTIONAL (NAN-2243). The ROWS, from `CensusReport.census` — not the report
+   * envelope. Omit it: the server recomputes the census at save time from the
+   * same reads the census endpoint uses, which is both cheaper than shipping it
+   * back and more correct, since the stored census and surface are then measured
+   * at one instant rather than stitched from two calls minutes apart.
+   */
+  census?: unknown;
   fingerprint: HuntFingerprint;
-  /** The surface object, from `SurfaceReport.huntable_surface` — not the envelope. */
-  huntable_surface: unknown;
+  /**
+   * OPTIONAL (NAN-2243). The surface object, from `SurfaceReport.huntable_surface`.
+   * Omit it — the server derives it. The summary shape the surface endpoint now
+   * returns by default is deliberately NOT this, and must not be sent here.
+   */
+  huntable_surface?: unknown;
   actor_weighting?: unknown[];
   /**
    * Merged with the server's view, monotonically toward degraded: the server

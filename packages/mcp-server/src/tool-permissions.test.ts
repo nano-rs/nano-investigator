@@ -10,6 +10,7 @@ import { TOOLS as NOTEBOOKS_TOOLS } from './tools/notebooks.js';
 import { TOOLS as ONBOARDING_TOOLS } from './tools/onboarding.js';
 import { TOOLS as PARSERS_TOOLS } from './tools/parsers.js';
 import { TOOLS as PREVALENCE_TOOLS } from './tools/prevalence.js';
+import { TOOLS as RECON_TOOLS } from './tools/recon.js';
 import { TOOLS as RISK_TOOLS } from './tools/risk.js';
 import { TOOLS as SEARCH_TOOLS } from './tools/search.js';
 import { TOOLS as SYSTEM_TOOLS } from './tools/system.js';
@@ -33,6 +34,7 @@ const ALL_TOOLS = [
   ...SYSTEM_TOOLS,
   ...PARSERS_TOOLS,
   ...ONBOARDING_TOOLS,
+  ...RECON_TOOLS,
 ];
 
 describe('tool permission metadata', () => {

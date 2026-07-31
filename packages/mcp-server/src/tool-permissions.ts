@@ -228,6 +228,21 @@ export const TOOL_PERMISSION_REQUIREMENTS: Record<
       when: 'credential_id is provided',
     },
   ),
+
+  // Recon (NAN-2238)
+  //
+  // All four take `hunts:manage`, which is the gate on recon as a whole:
+  // `hunts:view` is authority to READ a stored profile, while recon reads
+  // across the whole log estate and ends by creating hunt definitions — and
+  // creating hunt definitions is what `hunts:manage` is. It is also the gate
+  // the Profile page's own "Run recon" control checks before offering the
+  // action, so declaring less here would advertise a step of the flow that 403s
+  // partway through. `hunts:run` is deliberately NOT required: nothing in this
+  // flow schedules or starts anything.
+  hunt_build_census: allOf('hunts:manage'),
+  hunt_huntable_surface: allOf('hunts:manage'),
+  hunt_save_profile: allOf('hunts:manage'),
+  hunt_propose_drafts: allOf('hunts:manage'),
 };
 
 type ToolDefinition = {

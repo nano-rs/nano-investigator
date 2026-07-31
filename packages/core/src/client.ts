@@ -111,6 +111,9 @@ import type {
   UpdateDashboardRequest,
   PanelQueryRequest,
   PanelQueryResponse,
+  // Hunt recon
+  SaveHuntProfileRequest,
+  ProposeHuntDraftsRequest,
 } from './types.js';
 
 export interface NanosiemClientConfig {
@@ -152,10 +155,20 @@ export class NanosiemClient {
     method: string,
     path: string,
     body?: unknown,
-    opts?: { useSearchUrl?: boolean; query?: Record<string, string | number | boolean | undefined> }
+    opts?: {
+      useSearchUrl?: boolean;
+      query?: Record<string, string | number | boolean | undefined>;
+      /**
+       * Per-call override of the client timeout. For endpoints whose own
+       * server-side budget exceeds the 60s default — aborting at 60s would
+       * report a timeout for work the server was still going to finish.
+       */
+      timeoutMs?: number;
+    }
   ): Promise<ApiResponse<T>> {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    const timeout = opts?.timeoutMs ?? this.timeout;
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     const baseUrl = opts?.useSearchUrl ? this.searchUrl : this.apiUrl;
 
@@ -214,7 +227,7 @@ export class NanosiemClient {
           success: false,
           error: {
             code: 'TIMEOUT',
-            message: `Request timed out after ${this.timeout}ms`,
+            message: `Request timed out after ${timeout}ms`,
           },
         };
       }
@@ -754,5 +767,42 @@ export class NanosiemClient {
       `/api/parser-repositories/${this.encodeId(id)}/parsers/import/${this.encodeId(path)}`,
       req
     );
+  }
+
+  // ==================== Hunt recon (NAN-2238) ====================
+
+  /**
+   * Recon's probes share a 150s server-side wall budget, so the 60s default
+   * would abort work the server was still going to finish and report it as a
+   * client timeout — which reads as "recon is broken" rather than "recon is
+   * slow". A little headroom past the server's own ceiling.
+   */
+  private static readonly RECON_PROBE_TIMEOUT_MS = 180_000;
+
+  /**
+   * Build the telemetry census. Deterministic and server-computed: the same
+   * estate returns the same numbers, which is why nothing here is a parameter.
+   */
+  async buildHuntCensus(): Promise<ApiResponse<unknown>> {
+    return this.request<unknown>('POST', '/api/hunts/profile/census', {}, {
+      timeoutMs: NanosiemClient.RECON_PROBE_TIMEOUT_MS,
+    });
+  }
+
+  /** Build the ATT&CK huntable surface. Deterministic and server-computed. */
+  async huntHuntableSurface(): Promise<ApiResponse<unknown>> {
+    return this.request<unknown>('POST', '/api/hunts/profile/surface', {}, {
+      timeoutMs: NanosiemClient.RECON_PROBE_TIMEOUT_MS,
+    });
+  }
+
+  /** Store a new hunt profile. The server stamps provenance; callers cannot. */
+  async saveHuntProfile(req: SaveHuntProfileRequest): Promise<ApiResponse<unknown>> {
+    return this.request<unknown>('POST', '/api/hunts/profile', req);
+  }
+
+  /** Create DRAFT hunts — disabled, unscheduled — one per proposal. */
+  async proposeHuntDrafts(req: ProposeHuntDraftsRequest): Promise<ApiResponse<unknown>> {
+    return this.request<unknown>('POST', '/api/hunts/drafts', req);
   }
 }

@@ -1344,3 +1344,97 @@ export interface PanelQueryResponse {
   cached?: boolean;
   cache_age_secs?: number;
 }
+
+// ==================== Hunt recon (NAN-2238) ====================
+
+/**
+ * The judgement half of a profile, as an agent submits it.
+ *
+ * Mirrors `nanosiem_core::hunts::recon::ProfileFingerprint`. Note `planes`: it
+ * is a MAP of plane name to one sentence, not a list of `{label, value}`
+ * objects. Keys are free-form on purpose — an agent that finds a plane the
+ * server never enumerated should be able to name it.
+ *
+ * Narrow the way `SweepReport` is narrow: there is no field for `source_types`,
+ * for `source_types_complete`, or for an id. Not "ignored if present" — absent,
+ * so there is nothing to validate away.
+ */
+export interface HuntFingerprint {
+  /** The one derived sentence, or null with a `model_unavailable_reason`. */
+  summary?: string | null;
+  /** Plane name → one sentence. `{"identity": "Okta is the only IdP reporting."}` */
+  planes?: Record<string, string>;
+  /** What could not be read or resolved, in the agent's own words. */
+  probe_notes?: string[];
+  /** Why there is no summary, when there is none. */
+  model_unavailable_reason?: string | null;
+  /** Aggregates the agent measured, when it measured any. Never fabricated zeroes. */
+  aggregates?: Record<string, unknown> | null;
+}
+
+/** One threat actor weighted against this deployment. Agent-written judgement. */
+export interface HuntActorWeight {
+  name: string;
+  /** Why this actor fits THIS org — the profile match, in a clause. */
+  rationale: string;
+  /** 0.0–1.0. Non-finite values cannot go into JSONB and surface as a 500. */
+  fit: number;
+  technique_overlap?: number;
+  /** How many of the profile's hunt gaps this actor's techniques land in. */
+  gap_coverage?: number;
+  gap_total?: number;
+}
+
+/**
+ * `POST /api/hunts/profile`.
+ *
+ * There is deliberately no provenance field. The server stamps `source_types`
+ * from the inventory the census and surface reads enumerated — that manifest is
+ * an authorization input, since every source-scoped reader of the resulting
+ * profile is judged against it, so accepting one from the caller would let the
+ * caller choose who may read what it wrote.
+ */
+export interface SaveHuntProfileRequest {
+  /** The ROWS, from `CensusReport.census` — not the report envelope. */
+  census: unknown;
+  fingerprint: HuntFingerprint;
+  /** The surface object, from `SurfaceReport.huntable_surface` — not the envelope. */
+  huntable_surface: unknown;
+  actor_weighting?: unknown[];
+  /**
+   * Merged with the server's view, monotonically toward degraded: the server
+   * setting the flag cannot be cleared by a body that says `false`, and a body
+   * that says `true` is believed.
+   */
+  degraded?: boolean;
+  degraded_detail?: string;
+}
+
+/**
+ * One proposed DRAFT hunt.
+ *
+ * Mirrors `nanosiem_core::hunts::recon::GeneratedDraft`. Note what is absent
+ * and cannot be added: there is no `schedule_cron` and no `enabled`. The insert
+ * that creates these writes `schedule_cron = NULL, enabled = FALSE` as SQL
+ * literals rather than bind parameters, so no request shape can carry a
+ * schedule in.
+ */
+export interface HuntDraftProposal {
+  title: string;
+  /** `identity` | `endpoint` | `cloud` | `data` | `network` | `email`. */
+  category: string;
+  /** Markdown: what to look for, why it is worth looking, how to judge a hit. */
+  doc: string;
+  /** The opening nPL query a human will edit. */
+  sweep_query: string;
+  required_source_types: string[];
+  mitre_tactic?: string | null;
+  mitre_technique: string;
+  /** Prose ("weekly"), never a cron expression. */
+  suggested_cadence: string;
+}
+
+/** `POST /api/hunts/drafts`. */
+export interface ProposeHuntDraftsRequest {
+  drafts: HuntDraftProposal[];
+}

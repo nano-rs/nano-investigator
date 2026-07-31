@@ -495,6 +495,10 @@ describe('handleReconTool — errors an agent can act on', () => {
       }),
     };
     const result = await handleReconTool('hunt_huntable_surface', {}, asClient(client));
+    // The NARROW scope must be named first: an agent relaying this to an
+    // operator should be asking for `hunts:profile_write`, not for authority
+    // over the whole hunt library.
+    expect(result.content[0].text).toContain('hunts:profile_write');
     expect(result.content[0].text).toContain('hunts:manage');
   });
 });
@@ -518,7 +522,17 @@ describe('recon tool registration', () => {
     // guard that a new tool cannot ship without declaring what it needs.
     expect(() => withPermissionRequirements(TOOLS)).not.toThrow();
     for (const tool of TOOLS) {
-      expect(TOOL_PERMISSION_REQUIREMENTS[tool.name].alternatives[0].allOf).toEqual(['hunts:manage']);
+      const { alternatives } = TOOL_PERMISSION_REQUIREMENTS[tool.name];
+      // Two paths, narrow FIRST. A client renders the head of this list as
+      // "what this tool needs", so ordering is contract, not cosmetics — and
+      // `hunts:manage` at the head would send an operator to ask for authority
+      // over the entire hunt library to run one survey.
+      expect(alternatives.map((a) => a.allOf)).toEqual([
+        ['hunts:profile_write'],
+        ['hunts:manage'],
+      ]);
+      // Never collapsed into one path: that would claim a call needs BOTH.
+      expect(alternatives.every((a) => a.allOf.length === 1)).toBe(true);
     }
   });
 

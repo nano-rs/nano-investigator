@@ -789,16 +789,44 @@ export class NanosiemClient {
     });
   }
 
-  /** Build the ATT&CK huntable surface. Deterministic and server-computed. */
-  async huntHuntableSurface(): Promise<ApiResponse<unknown>> {
-    return this.request<unknown>('POST', '/api/hunts/profile/surface', {}, {
-      timeoutMs: NanosiemClient.RECON_PROBE_TIMEOUT_MS,
-    });
+  /**
+   * Build the ATT&CK huntable surface. Deterministic and server-computed.
+   *
+   * `detail` defaults to `summary` on both ends (NAN-2243). The full matrix is
+   * hundreds of kilobytes on a deployment with little telemetry — 371 KB
+   * measured, 99.9% of it `blind` technique rows that are not huntable by
+   * definition — and an agent that receives it cannot recover. Ask for `full`
+   * only when you are going to RENDER the matrix.
+   *
+   * The parameter is sent explicitly rather than left to the server default so
+   * the intent survives a future change to that default. A nano predating
+   * NAN-2243 ignores it and answers the full report; that is a server-side fix,
+   * not something a client can reshape without re-deriving the classification.
+   */
+  async huntHuntableSurface(detail: 'summary' | 'full' = 'summary'): Promise<ApiResponse<unknown>> {
+    return this.request<unknown>(
+      'POST',
+      '/api/hunts/profile/surface',
+      {},
+      { query: { detail }, timeoutMs: NanosiemClient.RECON_PROBE_TIMEOUT_MS }
+    );
   }
 
-  /** Store a new hunt profile. The server stamps provenance; callers cannot. */
+  /**
+   * Store a new hunt profile. The server stamps provenance; callers cannot.
+   *
+   * Takes the same probe timeout as the two primitives, and NOT the 60s default
+   * (NAN-2243). A save that omits the census and the surface — which is the
+   * normal path now — makes the server recompute both, so this call runs the
+   * same probes `buildHuntCensus` does under the same 150s server-side wall
+   * budget. Timing out at 60s would abandon it AFTER the server had committed
+   * the profile, leaving the agent reporting a failure beside a row that was in
+   * fact written.
+   */
   async saveHuntProfile(req: SaveHuntProfileRequest): Promise<ApiResponse<unknown>> {
-    return this.request<unknown>('POST', '/api/hunts/profile', req);
+    return this.request<unknown>('POST', '/api/hunts/profile', req, {
+      timeoutMs: NanosiemClient.RECON_PROBE_TIMEOUT_MS,
+    });
   }
 
   /** Create DRAFT hunts — disabled, unscheduled — one per proposal. */

@@ -37,10 +37,30 @@ const censusReport = () => ({
   source_types_complete: true,
 });
 
-/** What `hunt_huntable_surface` answers. */
+/** The pre-NAN-2243 full envelope, still accepted when a caller sends it. */
 const surfaceReport = () => ({
   observed_at: '2026-07-31T00:00:00Z',
   huntable_surface: { tactics: [], covered: 4, gaps: 9, blind: 2, unmapped: 1 },
+  live_source_types: ['okta'],
+  degraded: false,
+});
+
+/** What `hunt_huntable_surface` answers NOW — the bounded summary. */
+const surfaceSummaryReport = () => ({
+  observed_at: '2026-07-31T00:00:00Z',
+  detail: 'summary',
+  surface_summary: {
+    covered: 4,
+    gaps: 9,
+    blind: 615,
+    unmapped: 82,
+    gap_techniques: [],
+    blind_missing_source_types: [{ source_type: 'linux_auditd', blind_techniques: 542 }],
+    unmapped_technique_ids: [],
+    regressed_to_blind: [],
+    truncated: false,
+    truncation_detail: null,
+  },
   live_source_types: ['okta'],
   degraded: false,
 });
@@ -158,6 +178,16 @@ describe('unwrapSurface', () => {
 
   it('refuses anything that is neither', () => {
     expect(unwrapSurface({ covered: 1 }).error).toBeDefined();
+  });
+
+  // NAN-2243. The summary has no `tactics`, so storing it would leave the
+  // Profile page empty and the rail badge counting nothing. The generic "got
+  // neither" would send a model looking for a reshaping it must not perform, so
+  // this case names itself and says what to do instead.
+  it('names the bounded summary rather than asking a model to reshape it', () => {
+    const error = unwrapSurface(surfaceSummaryReport()).error ?? '';
+    expect(error).toContain('SUMMARY');
+    expect(error).toContain('Omit `huntable_surface`');
   });
 });
 
@@ -286,9 +316,9 @@ function stubClient() {
         calls.push({ method: 'census', body: undefined });
         return { success: true, data: { census: [{ source_type: 'okta' }], degraded: false } };
       },
-      huntHuntableSurface: async () => {
-        calls.push({ method: 'surface', body: undefined });
-        return { success: true, data: { tactics: [], covered: 1, gaps: 2, blind: 3 } };
+      huntHuntableSurface: async (detail?: unknown) => {
+        calls.push({ method: 'surface', body: detail });
+        return { success: true, data: surfaceSummaryReport() };
       },
       saveHuntProfile: async (body: unknown) => {
         calls.push({ method: 'profile', body });
@@ -304,6 +334,31 @@ function stubClient() {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const asClient = (c: unknown) => c as any;
+
+describe('handleReconTool — huntable_surface', () => {
+  // NAN-2243. The bounded shape is the server's default too, so this asserts
+  // INTENT: the call states what it wants, and stays bounded if that default
+  // ever moves.
+  it('asks for the bounded summary explicitly', async () => {
+    const { calls, client } = stubClient();
+    const result = await handleReconTool('hunt_huntable_surface', {}, asClient(client));
+
+    expect(result.isError).toBeFalsy();
+    expect(calls).toEqual([{ method: 'surface', body: 'summary' }]);
+  });
+
+  it('tells the model why blind techniques are aggregated and where the leverage is', () => {
+    const surface = TOOLS.find((t) => t.name === 'hunt_huntable_surface');
+    const description = surface?.description ?? '';
+    // The claim that buys the size reduction, stated rather than assumed.
+    expect(description).toContain('not huntable by definition');
+    // And the thing that replaces the rows it drops.
+    expect(description).toContain('WHERE THE LEVERAGE IS');
+    expect(description).toContain('blind_missing_source_types');
+    // A model must not hand this back to the save.
+    expect(description).toContain('DO NOT pass this result to `hunt_save_profile`');
+  });
+});
 
 describe('handleReconTool — save_profile', () => {
   it('unwraps the report envelopes the primitives return', async () => {
@@ -410,16 +465,35 @@ describe('handleReconTool — save_profile', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('refuses to save before the primitives have been built', async () => {
+  // NAN-2243 — the reason recon was unusable from an agent. Requiring the two
+  // deterministic halves made the agent hold 371 KB of server-computed
+  // structure purely to hand it back. Sending only the fingerprint must work,
+  // and must send NEITHER key rather than sending an empty one: an explicit
+  // `census: []` would store a profile claiming the estate ingests nothing.
+  it('saves a fingerprint alone, carrying neither deterministic half', async () => {
     const { calls, client } = stubClient();
     const result = await handleReconTool(
       'hunt_save_profile',
-      { fingerprint: fingerprint(), huntable_surface: surfaceReport() },
+      { fingerprint: fingerprint() },
       asClient(client),
     );
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('hunt_build_census');
-    expect(calls).toHaveLength(0);
+
+    expect(result.isError).toBeFalsy();
+    expect(calls).toHaveLength(1);
+    const body = calls[0].body as Record<string, unknown>;
+    expect(body.census).toBeUndefined();
+    expect(body.huntable_surface).toBeUndefined();
+    expect((body.fingerprint as Record<string, unknown>).summary).toBe(fingerprint().summary);
+  });
+
+  it('does not ask the model for the deterministic halves', () => {
+    const save = TOOLS.find((t) => t.name === 'hunt_save_profile');
+    expect(save?.inputSchema.required).toEqual(['fingerprint']);
+    expect(Object.keys(save?.inputSchema.properties ?? {})).not.toContain('census');
+    expect(Object.keys(save?.inputSchema.properties ?? {})).not.toContain('huntable_surface');
+    // And it says so, so a model reading the description alone does not go
+    // looking for the fields it used to be told to copy.
+    expect(save?.description).toContain('Do NOT send the census or the huntable surface back');
   });
 
   it('does not send a fingerprint that would render blank', async () => {

@@ -27,16 +27,36 @@
  *   trail:      {"kind":"trail","at":"<ISO-8601>","note":…}   ← discriminator "kind"
  *   knowledge:  {"kind":"knowledge","category":…,"subject":…,"fact":…,
  *                "confidence":<number>,"evidence_event_ids":[…],"ttl_days":<number>}
+ *   suppression:{"kind":"suppression","entity_type":…,"entity_value":…,"reason":…,
+ *                "ttl_days":<number>}
  * One JSON object per line, appended and flushed per call. A reader treats any line
  * without `kind` as a lead.
  *
- * WHY KNOWLEDGE COMES OUT THE SAME PIPE: recording a fact server-side needs
- * `hunts:report`, and the sweep agent must never hold it — the desktop's
- * AGENT_KEY_FORBIDDEN says so, because this agent has attacker-authored log content
- * in its context. So the agent writes a line here, exactly like a lead, and the
- * runner — which does hold `hunts:report` — submits it to POST /api/hunts/knowledge
- * afterwards. The sweep id is deliberately NOT a tool argument: the runner knows
- * which lease it holds, and an agent-supplied one would be the agent asserting that.
+ * WHY KNOWLEDGE AND SUPPRESSION COME OUT THE SAME PIPE: recording either one
+ * server-side needs `hunts:report`, and the sweep agent must never hold it — the
+ * desktop's AGENT_KEY_FORBIDDEN says so, because this agent has attacker-authored
+ * log content in its context. So the agent writes a line here, exactly like a lead,
+ * and the runner — which does hold `hunts:report` — submits it to
+ * POST /api/hunts/knowledge or POST /api/hunts/suppressions afterwards. The sweep id
+ * is deliberately NOT a tool argument: the runner knows which lease it holds, and an
+ * agent-supplied one would be the agent asserting that.
+ *
+ * WHY A SUPPRESSION IS STILL SAFE TO WRITE FROM HERE. Suppression is the one thing
+ * on this surface an unattended agent must not be handed carelessly — a process that
+ * can suppress can blind its own successors. Four properties keep it bounded, and
+ * all four live outside this file: it names an ENTITY, and the server resolves that
+ * to a lead THIS SWEEP filed and takes the fingerprint from the lead, so a sweep can
+ * only ever suppress a finding it actually reported; the row it writes carries that
+ * one fingerprint and no wildcard, hunt-wide or playbook form; a suppression ZEROES
+ * a lead's score without hiding the lead, so an analyst still sees it, flagged, with
+ * the reason attached; and it expires, on a ceiling the database enforces.
+ *
+ * The entity is deliberately the ONLY identity this tool asks for. An earlier
+ * revision asked for a fingerprint, which no agent can obtain — fingerprints are
+ * derived server-side from evidence the server resolved, this process has no network
+ * and no hunt id, and record_lead returns none. Naming the entity is both the only
+ * satisfiable contract and the safer one: it leaves no server-derived value a caller
+ * could supply at all.
  */
 
 import { constants } from 'node:fs';
@@ -75,6 +95,25 @@ export const CAPS = {
   // Mirrors the server's MAX_TTL_DAYS. The server clamps regardless — this is here
   // so an agent asking for "permanent" learns immediately that nothing is.
   KNOWLEDGE_TTL_DAYS: 90,
+  // Suppression. It names an entity, so it reuses ENTITY_VALUE's cap — the value
+  // here is the SAME identifier that went to record_lead, and a cap that disagreed
+  // would let a lead be recorded that could never afterwards be named.
+  //
+  // Prose, so truncated rather than rejected: an unexplained suppression is
+  // unreviewable, and losing the reason's last clause beats losing the whole call.
+  SUPPRESSION_REASON: 1000,
+  // A reason shorter than this is almost certainly "noisy" or "benign" — a verdict
+  // with no working shown. Warned about, not rejected, because the agent may have
+  // been terse about something it genuinely established.
+  SUPPRESSION_REASON_THIN: 40,
+  // Mirrors the server's MAX_AGENT_SUPPRESSION_TTL_DAYS, and it is DELIBERATELY a
+  // fraction of a fact's 90. The asymmetry is the point: a wrong fact costs a later
+  // sweep a bad prior it can check, a wrong suppression costs it the finding. A
+  // fortnight means a poisoned suppression self-heals before it can hide a campaign.
+  SUPPRESSION_TTL_DAYS: 14,
+  // The server's DEFAULT_AGENT_SUPPRESSION_TTL_DAYS, stated so an agent that omits
+  // the field knows what it accepted rather than guessing.
+  SUPPRESSION_TTL_DAYS_DEFAULT: 7,
   RECORDS_PER_PROCESS: 1000,
   FILE_BYTES: 16 * 1024 * 1024,
 } as const;
@@ -391,6 +430,41 @@ export const TOOLS = [
       required: ['category', 'subject', 'fact'],
     },
   },
+  {
+    name: 'record_suppression',
+    description:
+      'Suppress ONE lead you have ESTABLISHED is benign, and say why. Use it only when you have done the work and can state the explanation: what the pattern is, what actually causes it, and over what period you confirmed it. If you are recording this because a lead looks noisy, repetitive or boring rather than because you understand it, do not — record_knowledge is where an unproven observation belongs, and an unsure lead stays a lead. ' +
+      'WHAT IT ACTUALLY DOES: it ZEROES THE LEAD\'S SCORE. IT DOES NOT HIDE THE LEAD. An analyst still sees it on the bench, flagged as agent-suppressed, and reads your reason as the justification for why it scored zero — so write the reason for that analyst, not for yourself. A suppression you cannot justify is a suppression that gets revoked and held against every other conclusion in this sweep. ' +
+      'It also EXPIRES, and it is narrow: it applies to that ONE finding. There is deliberately no way from here to suppress a hunt, a pattern or a whole entity class — an unattended sweep that could suppress broadly could blind its own successors, so it cannot. ' +
+      'YOU MAY ONLY SUPPRESS A LEAD YOU YOURSELF FILED IN THIS SWEEP. Name the SAME `entity_type` and `entity_value` you passed to record_lead — that is the entire identity you need, and it is the one you already have. The server looks the entity up among this sweep\'s own leads and takes the finding\'s identity from the lead it finds; if this sweep filed no lead for that entity, nothing is suppressed. So record the lead FIRST, then suppress it — and never name an entity you did not report, because you would only be describing a finding you never saw. The value is matched without regard to case, so echo back whatever casing the log showed you. ' +
+      '`reason` is required and is the whole point: an unexplained suppression is unreviewable, which defeats the visibility this is built on. "noisy" is not a reason. "the 03:00 spike on svc_backup is the nightly job, confirmed across 90 days of the same schedule and the same parent process" is. ' +
+      'Each call appends one line to the sweep\'s local file, exactly like record_lead. Nothing is sent anywhere: the hunt runner submits it after the sweep and stamps which sweep this was — you do not name it. ' +
+      `Caps: entity_value ≤${CAPS.ENTITY_VALUE} chars (rejected if longer, exactly as on record_lead); reason ≤${CAPS.SUPPRESSION_REASON} chars (truncated, not rejected) with newlines collapsed to spaces; ttl_days defaults to ${CAPS.SUPPRESSION_TTL_DAYS_DEFAULT} and is capped at ${CAPS.SUPPRESSION_TTL_DAYS}; ≤${CAPS.RECORDS_PER_PROCESS} records per sweep, shared with record_lead, note_trail and record_knowledge.`,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        entity_type: {
+          type: 'string',
+          enum: [...ENTITY_TYPES],
+          description:
+            'The entity_type of the lead you are suppressing — the SAME one you passed to record_lead for it.',
+        },
+        entity_value: {
+          type: 'string',
+          description: `The entity itself, as you gave it to record_lead — the IP, username, hostname, domain, hash, process name, URL, address or path. Matched without regard to case, so the casing you saw in the log is fine. ≤${CAPS.ENTITY_VALUE} chars.`,
+        },
+        reason: {
+          type: 'string',
+          description: `Why this is benign, written for the analyst who will read it next to the lead: what the pattern is, what causes it, and how long you confirmed it holds. Required — this is the record of your reasoning, and it is what a reviewer uses to keep or revoke the suppression. Whitespace and newlines collapse to single spaces. ≤${CAPS.SUPPRESSION_REASON} chars (longer is truncated).`,
+        },
+        ttl_days: {
+          type: 'number',
+          description: `How long the suppression should hold before the lead scores normally again. Optional; defaults to ${CAPS.SUPPRESSION_TTL_DAYS_DEFAULT} days and is capped at ${CAPS.SUPPRESSION_TTL_DAYS}. Nothing you suppress here stays suppressed indefinitely, and asking for less is right whenever the estate changes.`,
+        },
+      },
+      required: ['entity_type', 'entity_value', 'reason'],
+    },
+  },
 ];
 
 // ── Handlers ─────────────────────────────────────────────────────────────────
@@ -635,6 +709,114 @@ async function recordKnowledge(args: Record<string, unknown>): Promise<ToolResul
   });
 }
 
+async function recordSuppression(args: Record<string, unknown>): Promise<ToolResult> {
+  // The SAME vocabulary and the same cap record_lead applies, reusing its constants
+  // rather than restating them: this names a lead the sweep already filed, so a
+  // suppression the lead's own rules would have rejected could never match anything.
+  // `entity_type` is folded exactly as record_lead folds it, because the server
+  // compares it EXACTLY — an unfolded "User" would resolve to no lead at all.
+  const entityType = (asString(args.entity_type) ?? '').toLowerCase();
+  if (!(ENTITY_TYPES as readonly string[]).includes(entityType)) {
+    return err(
+      `\`entity_type\` must be one of: ${ENTITY_TYPES.join(', ')} — the same one you gave record_lead for this finding.`,
+    );
+  }
+
+  // NOT case-folded, unlike the type. The server matches the value
+  // case-insensitively, so folding would buy nothing, and the analyst reading this
+  // suppression should see the entity spelled the way the log spelled it.
+  const entityValue = asString(args.entity_value) ?? '';
+  if (!entityValue) {
+    return err(
+      '`entity_value` is required — the entity of the lead you are suppressing, exactly as you gave it to record_lead. A suppression names a finding you filed; if you did not file one, there is nothing to suppress.',
+    );
+  }
+  if (entityValue.length > CAPS.ENTITY_VALUE) {
+    return err(
+      `\`entity_value\` is ${entityValue.length} chars, over the ${CAPS.ENTITY_VALUE}-char cap — the same cap record_lead applies, so no lead you could have filed exceeds it. Name the entity itself, not a description of it.`,
+    );
+  }
+
+  const warnings: string[] = [];
+
+  // Collapsed BEFORE the cap, like a fact: the reason is rendered on one row beside
+  // the lead it zeroed, and the cap should count the justification rather than the
+  // whitespace somebody padded it with.
+  let reason = collapse(asString(args.reason) ?? '');
+  if (!reason) {
+    return err(
+      '`reason` is required — an unexplained suppression is unreviewable, which is the whole thing this is built to avoid. State what the pattern is, what causes it, and over what period you confirmed it.',
+    );
+  }
+  if (reason.length > CAPS.SUPPRESSION_REASON) {
+    reason = `${cut(reason, CAPS.SUPPRESSION_REASON)}… [truncated at ${CAPS.SUPPRESSION_REASON} chars]`;
+    warnings.push(`reason truncated at ${CAPS.SUPPRESSION_REASON} chars.`);
+  }
+  // Warned, not rejected: the agent may be terse about something it genuinely
+  // established, and losing the suppression would not improve the reason. But a
+  // one-word verdict is what a reviewer revokes, so say so while it can be fixed.
+  if (reason.length < CAPS.SUPPRESSION_REASON_THIN) {
+    warnings.push(
+      `The reason is only ${reason.length} characters. An analyst reads it as the entire justification for a lead scoring zero — a verdict with no working shown ("noisy", "benign", "expected") is what gets a suppression revoked. Say what causes the pattern and over what period you confirmed it.`,
+    );
+  }
+
+  // Clamped rather than rejected, exactly as a fact's ttl is: a shorter suppression
+  // asserts nothing false, and expiry is the main thing bounding one that was wrong.
+  let ttlDays: number | undefined;
+  if (args.ttl_days !== undefined && args.ttl_days !== null) {
+    const value = asFiniteNumber(args.ttl_days);
+    if (value === null || value < 1) {
+      return err(
+        `\`ttl_days\` must be a whole number of days of 1 or more (capped at ${CAPS.SUPPRESSION_TTL_DAYS}). Omit it to accept the default of ${CAPS.SUPPRESSION_TTL_DAYS_DEFAULT} days.`,
+      );
+    }
+    const requested = Math.round(value);
+    ttlDays = Math.min(requested, CAPS.SUPPRESSION_TTL_DAYS);
+    if (ttlDays !== requested) {
+      warnings.push(
+        `ttl_days capped at ${CAPS.SUPPRESSION_TTL_DAYS} days — a suppression written by an unattended sweep is deliberately short-lived, so re-establish it next time if it still holds.`,
+      );
+    }
+  }
+
+  // Key order below IS the file contract; do not reorder.
+  const record: Record<string, unknown> = {
+    kind: 'suppression',
+    entity_type: entityType,
+    entity_value: entityValue,
+    reason,
+  };
+  if (ttlDays !== undefined) record.ttl_days = ttlDays;
+
+  return serialised(async () => {
+    if (recordsWritten >= CAPS.RECORDS_PER_PROCESS) {
+      return err(
+        `This sweep has already recorded ${CAPS.RECORDS_PER_PROCESS} records — the cap. Stop recording and summarise what you have.`,
+      );
+    }
+    const file = await resolveLeadsFile();
+    if (isToolResult(file)) return file;
+
+    try {
+      await appendLine(file.path, JSON.stringify(record));
+    } catch (e) {
+      return err(`Could not write the suppression: ${writeFailure(e)}`);
+    }
+    recordsWritten += 1;
+
+    return ok({
+      recorded: true,
+      kind: 'suppression',
+      entity_type: entityType,
+      entity_value: entityValue,
+      records_this_sweep: recordsWritten,
+      leads_file: file.path,
+      ...(warnings.length ? { warnings } : {}),
+    });
+  });
+}
+
 export async function handleHuntTool(
   name: string,
   args: Record<string, unknown>,
@@ -646,6 +828,8 @@ export async function handleHuntTool(
       return noteTrail(args);
     case 'record_knowledge':
       return recordKnowledge(args);
+    case 'record_suppression':
+      return recordSuppression(args);
     default:
       return err(`Unknown hunt tool: ${name}`);
   }

@@ -57,10 +57,38 @@ describe('parsers TOOLS registration', () => {
     expect(tool!.inputSchema.required).toEqual(['vrl_code']);
   });
 
+  it('registers the publish lifecycle tools (NAN-2293)', () => {
+    expect(names).toContain('publish_log_source');
+    expect(names).toContain('get_log_source_draft_status');
+  });
+
   it('deploy_log_source description warns the deploy is best-effort', () => {
     const tool = TOOLS.find((t) => t.name === 'deploy_log_source');
     expect(tool!.description).toMatch(/best-effort/i);
     expect(tool!.description).toContain('get_log_source_health');
+  });
+
+  // NAN-2293: deploy renders the published active version, so an agent that
+  // reaches for it after editing VRL ships the OLD parser and gets a success
+  // back. The descriptions are the only thing standing between an agent and
+  // that trap — assert they point at publish.
+  it('deploy_log_source description sends VRL changes to publish instead', () => {
+    const tool = TOOLS.find((t) => t.name === 'deploy_log_source');
+    expect(tool!.description).toContain('publish_log_source');
+    expect(tool!.description).toMatch(/does NOT pick up unpublished/i);
+  });
+
+  it('update_log_source description sends VRL changes to publish, not deploy', () => {
+    const tool = TOOLS.find((t) => t.name === 'update_log_source');
+    expect(tool!.description).toContain('publish_log_source');
+    expect(tool!.description).toMatch(/working copy/i);
+  });
+
+  it('publish_log_source description explains it is the make-it-live step', () => {
+    const tool = TOOLS.find((t) => t.name === 'publish_log_source');
+    expect(tool!.description).toMatch(/best-effort/i);
+    expect(tool!.description).toContain('get_log_source_health');
+    expect(tool!.description).toMatch(/active version/i);
   });
 
   it('every tool has a non-empty description and an object input schema', () => {
@@ -103,7 +131,7 @@ describe('handleParsersTool dispatch', () => {
     expect(testVrl).toHaveBeenCalledWith({ vrl_code: '.udm.src_ip = "1.2.3.4"', sample_log: 'raw line' });
   });
 
-  it('create_log_source builds the request and flags the draft is not deployed', async () => {
+  it('create_log_source builds the request and flags the working copy is not live', async () => {
     const createLogSource = vi.fn().mockResolvedValue({
       success: true,
       data: { id: 'logsource_abc', name: 'Apache', source_type: 'apache', deployed: false },
@@ -123,7 +151,8 @@ describe('handleParsersTool dispatch', () => {
     });
     const parsed = JSON.parse(result.content[0].text as string);
     expect(parsed.id).toBe('logsource_abc');
-    expect(parsed.note).toMatch(/NOT deployed/i);
+    expect(parsed.note).toMatch(/NOT live/i);
+    expect(parsed.note).toContain('publish_log_source');
   });
 
   it('deploy_log_source appends the confirm-with-health advisory', async () => {
@@ -136,7 +165,82 @@ describe('handleParsersTool dispatch', () => {
     const result = await handleParsersTool('deploy_log_source', { id: 'logsource_abc' }, client);
 
     expect(deployLogSource).toHaveBeenCalledWith('logsource_abc');
+    const note = JSON.parse(result.content[0].text as string).note;
+    expect(note).toMatch(/get_log_source_health/);
+    // The success path is exactly where the stale-VRL trap bites, so the note
+    // has to say what deploy did NOT ship.
+    expect(note).toContain('publish_log_source');
+  });
+
+  it('deploy_log_source surfaces a failed deployment as an error, not a success note', async () => {
+    const deployLogSource = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        success: false,
+        log_source_id: 'logsource_abc',
+        action: 'deploy',
+        message: 'VRL validation failed: unknown function "http_request"',
+      },
+    });
+    const client = makeMockClient({ deployLogSource });
+
+    const result = await handleParsersTool('deploy_log_source', { id: 'logsource_abc' }, client);
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('http_request');
+  });
+
+  it('publish_log_source promotes the working copy and advises confirming health', async () => {
+    const publishLogSource = vi.fn().mockResolvedValue({
+      success: true,
+      data: { success: true, log_source_id: 'logsource_abc', action: 'publish', message: 'ok' },
+    });
+    const client = makeMockClient({ publishLogSource });
+
+    const result = await handleParsersTool('publish_log_source', { id: 'logsource_abc' }, client);
+
+    expect(publishLogSource).toHaveBeenCalledWith('logsource_abc');
+    expect(result.isError).not.toBe(true);
     expect(JSON.parse(result.content[0].text as string).note).toMatch(/get_log_source_health/);
+  });
+
+  it('publish_log_source surfaces a validation rejection as an error, not a success note', async () => {
+    // The API answers a bad working copy with HTTP 200 + success:false and
+    // creates no version. Passing that through as ok() would let an agent
+    // report "published" over a parser that never changed.
+    const publishLogSource = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        success: false,
+        log_source_id: 'logsource_abc',
+        action: 'publish',
+        message: 'VRL validation failed: error[E651]: unhandled fallible assignment',
+      },
+    });
+    const client = makeMockClient({ publishLogSource });
+
+    const result = await handleParsersTool('publish_log_source', { id: 'logsource_abc' }, client);
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('E651');
+    expect(result.content[0].text).toMatch(/still live/i);
+  });
+
+  it('get_log_source_draft_status reports unpublished working-copy changes', async () => {
+    const getLogSourceDraftStatus = vi.fn().mockResolvedValue({
+      success: true,
+      data: { id: 'logsource_abc', has_draft_changes: true, active_version_number: 3 },
+    });
+    const client = makeMockClient({ getLogSourceDraftStatus });
+
+    const result = await handleParsersTool(
+      'get_log_source_draft_status',
+      { id: 'logsource_abc' },
+      client,
+    );
+
+    expect(getLogSourceDraftStatus).toHaveBeenCalledWith('logsource_abc');
+    expect(JSON.parse(result.content[0].text as string).has_draft_changes).toBe(true);
   });
 
   it('create_log_source carries the routed-feed match_values (the central router key)', async () => {
@@ -241,7 +345,7 @@ describe('handleParsersTool dispatch', () => {
     );
 
     expect(importParser).toHaveBeenCalledWith('repo_1', 'parsers/apache.toml', { source_type: 'apache' });
-    expect(JSON.parse(result.content[0].text as string).note).toMatch(/deploy_log_source/);
+    expect(JSON.parse(result.content[0].text as string).note).toMatch(/publish_log_source/);
   });
 
   it('surfaces the API error message on failure', async () => {

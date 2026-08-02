@@ -1,20 +1,29 @@
 /**
- * Parser authoring tools — build, validate, test, save, and deploy log-source
+ * Parser authoring tools — build, validate, test, save, and publish log-source
  * parsers (Vector VRL) without the web UI.
  *
  * These are the open-edition equivalent of the meloD parser wizard: Claude
  * writes the VRL itself (steered by the `nanosiem://reference/vrl-parsers`
- * resource), then validates → tests → saves → deploys → confirms flow through
- * these tools. No Enterprise / AI-credit dependency.
+ * resource), then validates → tests → saves → publishes → confirms flow
+ * through these tools. No Enterprise / AI-credit dependency.
  *
  * The canonical authoring loop (see the `build_parser` prompt):
  *   1. get_source_types / list_log_sources — see what already exists
  *   2. write VRL (read the vrl-parsers reference first)
  *   3. validate_vrl — compile-check
  *   4. test_parse_sample — run against a real sample line, inspect UDM output
- *   5. create_log_source — save as a draft (NOT deployed)
- *   6. deploy_log_source — push to Vector
+ *   5. create_log_source — save as a working copy (NOT live)
+ *   6. publish_log_source — promote the working copy and push it to Vector
  *   7. get_log_source_health — confirm events are actually flowing
+ *
+ * PUBLISH, NOT DEPLOY (NAN-2293). Saving writes a working copy; deploy renders
+ * the ACTIVE VERSION. Only publish promotes the working copy into a new active
+ * version, so a deploy after an edit ships the PREVIOUS VRL and still returns
+ * success — it validates the working copy on the way past, which makes the
+ * response look correct. A log source with no versions yet falls back to the
+ * working copy, so the first deploy after a create genuinely works; every
+ * deploy after the first publish silently ships stale VRL. Any time parser_vrl
+ * changed, the tool you want is publish_log_source.
  */
 
 import type {
@@ -146,7 +155,7 @@ export const TOOLS = [
   {
     name: 'update_log_source',
     description:
-      'Update an existing parser. Only the fields you pass change; everything else is left alone. Editing parser_vrl does NOT auto-deploy — call deploy_log_source after. Fetch get_log_source first to edit against current state.',
+      'Update an existing parser. Only the fields you pass change; everything else is left alone. This writes the WORKING COPY only — it does not go live. To make the change live call publish_log_source (NOT deploy_log_source, which redeploys the previously published version and would silently ship the old VRL). Fetch get_log_source first to edit against current state.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -172,11 +181,32 @@ export const TOOLS = [
       required: ['id'],
     },
   },
-  // ---- Deploy / lifecycle ----------------------------------------------
+  // ---- Publish / deploy / lifecycle ------------------------------------
+  {
+    name: 'publish_log_source',
+    description:
+      'Make a parser live: promotes the saved working copy to a new active version, then deploys it to Vector. THIS IS THE TOOL TO USE AFTER ANY parser_vrl CHANGE — deploy_log_source redeploys the previously published version and would silently ship the old VRL. Validates the working copy first and fails without creating a version if it does not compile. Still best-effort at the Vector reload: wait ~1 minute, then call get_log_source_health to confirm events are actually flowing before telling the user it is live.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: { id: { type: 'string', description: 'Log source id (typeid).' } },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'get_log_source_draft_status',
+    annotations: { readOnlyHint: true },
+    description:
+      "Whether a parser's working copy has unpublished changes, plus the active version number and the VRL currently published. Use it to tell 'my edit is live' from 'my edit is saved but a deploy would ship the old VRL'. has_draft_changes: true means publish_log_source is still needed.",
+    inputSchema: {
+      type: 'object' as const,
+      properties: { id: { type: 'string', description: 'Log source id (typeid).' } },
+      required: ['id'],
+    },
+  },
   {
     name: 'deploy_log_source',
     description:
-      'Deploy a saved parser to Vector (writes config + triggers reload). IMPORTANT: this is best-effort — it can report success even if Vector did not reload. After deploying, wait ~1 minute then call get_log_source_health to confirm events are actually flowing before telling the user it is live.',
+      "Redeploy a parser's ALREADY-PUBLISHED version to Vector (writes config + triggers reload). This does NOT pick up unpublished edits — if you changed parser_vrl, use publish_log_source instead. Use deploy to re-push an unchanged parser, e.g. after a routing change or to retry a failed reload. IMPORTANT: best-effort — it can report success even if Vector did not reload. After deploying, wait ~1 minute then call get_log_source_health to confirm events are actually flowing before telling the user it is live.",
     inputSchema: {
       type: 'object' as const,
       properties: { id: { type: 'string', description: 'Log source id (typeid).' } },
@@ -441,7 +471,7 @@ export async function handleParsersTool(
         if (!res.success) return err(res.error?.message ?? 'Failed to create log source');
         return ok({
           ...res.data,
-          note: 'Saved as a draft. It is NOT deployed yet — call deploy_log_source to push it to Vector.',
+          note: 'Saved as a working copy. It is NOT live yet — call publish_log_source to promote it and push it to Vector.',
         });
       }
 
@@ -450,16 +480,47 @@ export async function handleParsersTool(
         if (!res.success) return err(res.error?.message ?? 'Failed to update log source');
         return ok({
           ...res.data,
-          note: 'Updated. If you changed parser_vrl, call deploy_log_source to push the change to Vector.',
+          note: 'Updated the working copy. If you changed parser_vrl, call publish_log_source to make it live — deploy_log_source would redeploy the previously published VRL and report success without shipping your change.',
         });
+      }
+
+      case 'publish_log_source': {
+        const res = await client.publishLogSource(args.id as string);
+        if (!res.success) return err(res.error?.message ?? 'Failed to publish log source');
+        // A failed VRL validation comes back as a 200 with success: false and
+        // no version created — surface that as an error rather than letting a
+        // "published" note ride on top of it.
+        if (res.data?.success === false) {
+          return err(
+            `Publish rejected: ${res.data.message ?? 'VRL validation failed'}. No new version was created; the previously published VRL is still live.`,
+          );
+        }
+        return ok({
+          ...res.data,
+          note: 'Published as a new active version and deployed. The Vector reload is still best-effort: wait ~1 minute, then call get_log_source_health to confirm events are actually flowing before reporting this as live.',
+        });
+      }
+
+      case 'get_log_source_draft_status': {
+        const res = await client.getLogSourceDraftStatus(args.id as string);
+        if (!res.success) return err(res.error?.message ?? 'Failed to get draft status');
+        return ok(res.data);
       }
 
       case 'deploy_log_source': {
         const res = await client.deployLogSource(args.id as string);
         if (!res.success) return err(res.error?.message ?? 'Failed to deploy log source');
+        // Same 200-with-success:false shape as publish (a rejected VRL, or a
+        // staging failure). Returning ok() here would hand an agent a
+        // deployment result it reads as "shipped".
+        if (res.data?.success === false) {
+          return err(
+            `Deploy failed: ${res.data.message ?? 'unknown deployment error'}. The previously deployed config is still live.`,
+          );
+        }
         return ok({
           ...res.data,
-          note: 'Deploy is best-effort: Vector reload may lag or fail silently. Wait ~1 minute, then call get_log_source_health to confirm events are actually flowing before reporting this as live.',
+          note: 'Redeployed the published version — this does NOT include unpublished working-copy edits (use publish_log_source for those). Deploy is best-effort: Vector reload may lag or fail silently. Wait ~1 minute, then call get_log_source_health to confirm events are actually flowing before reporting this as live.',
         });
       }
 
@@ -578,7 +639,7 @@ export async function handleParsersTool(
         if (!res.success) return err(res.error?.message ?? 'Failed to import parser');
         return ok({
           ...res.data,
-          note: 'Imported as a draft log source. Call deploy_log_source with the returned log_source_id to activate it.',
+          note: 'Imported as a working copy. Call publish_log_source with the returned log_source_id to activate it — that also creates version 1, so later edits publish cleanly.',
         });
       }
 

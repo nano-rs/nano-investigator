@@ -137,5 +137,15 @@ if err == null {
 
 ## After it parses
 
-\`create_log_source\` (draft) → \`deploy_log_source\` → wait ~1 min → \`get_log_source_health\`. If \`health_status\` is \`no_data\` after a few minutes, events aren't reaching the parser: check that a **routing rule** maps the incoming events to this parser's \`source_type\` (\`list_source_configs\`, \`check_rule_reachability\`, \`create_routing_rule\`).
+\`create_log_source\` (working copy) → \`publish_log_source\` → wait ~1 min → \`get_log_source_health\`. If \`health_status\` is \`no_data\` after a few minutes, events aren't reaching the parser: check that a **routing rule** maps the incoming events to this parser's \`source_type\` (\`list_source_configs\`, \`check_rule_reachability\`, \`create_routing_rule\`).
+
+### Publish, not deploy
+
+\`create_log_source\` / \`update_log_source\` write a **working copy**. \`deploy_log_source\` ships the **published active version**. Only \`publish_log_source\` promotes the working copy into a new active version.
+
+So deploying after an edit ships the **previous** VRL — and still returns \`success\`, because it validates the working copy on the way past. The response looks right; the pipeline is running your old parser.
+
+The trap that hides this: a log source with no versions yet falls back to the working copy, so the **first** deploy after a create genuinely works. Every deploy after the first publish silently ships stale VRL.
+
+If events look unparsed after a deploy, call \`get_log_source_draft_status\` — \`has_draft_changes: true\` means your edit was never published. Only \`get_log_source_health\` (and actually querying the events) proves a parser is live; a \`success\` deployment record does not.
 `;

@@ -887,6 +887,21 @@ export interface DeploymentResult {
   deployment_id?: string | null;
 }
 
+/**
+ * A log source plus whether its working copy has unpublished changes.
+ *
+ * The API flattens the LogSource into this response, so every LogSource field
+ * is present alongside the three draft fields. `has_draft_changes` is true when
+ * the saved working copy differs from the published active version — i.e. when
+ * an edit has been saved but not published, and therefore is NOT what a deploy
+ * would ship.
+ */
+export interface LogSourceDraftStatus extends LogSource {
+  has_draft_changes: boolean;
+  active_version_number?: number | null;
+  active_parser_vrl?: string | null;
+}
+
 export interface LogSourceDeployment {
   id: string;
   log_source_id: string;

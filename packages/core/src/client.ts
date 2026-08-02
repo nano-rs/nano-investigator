@@ -87,6 +87,7 @@ import type {
   LiveTestResult,
   DeploymentResult,
   LogSourceDeployment,
+  LogSourceDraftStatus,
   LogSourceHealth,
   SourceConfiguration,
   SourceConfigTypeInfo,
@@ -600,8 +601,22 @@ export class NanosiemClient {
 
   // ==================== Parsers / Log Sources (→ api) ====================
   // A log source is a Vector VRL parser bound to a source_type. The authoring
-  // flow is: validate VRL → test against a sample → create (draft) → deploy →
-  // confirm health. Save and deploy are distinct, mirroring the UI.
+  // flow is: validate VRL → test against a sample → create/update (working
+  // copy) → publish → confirm health. Save, publish, and deploy are three
+  // distinct steps, mirroring the UI.
+  //
+  // Working copy vs active version — the distinction that makes deploy alone
+  // insufficient. createLogSource/updateLogSource write the WORKING COPY.
+  // Deploy renders the ACTIVE VERSION (list_enabled_for_deploy in
+  // nanosiem-core substitutes the active version's parser_vrl), and only
+  // publish promotes the working copy into a new active version. So a deploy
+  // after an edit ships the PREVIOUS VRL while reporting success — it even
+  // validates the working copy first, which makes the response look right.
+  //
+  // The trap: a log source with no versions yet falls back to the working
+  // copy, so the first deploy after a create genuinely works. Every deploy
+  // after the first publish silently ships stale VRL. Use publishLogSource for
+  // any VRL change.
 
   async listLogSources(): Promise<ApiResponse<LogSource[]>> {
     return this.request<LogSource[]>('GET', '/api/log-sources');
@@ -641,9 +656,42 @@ export class NanosiemClient {
   }
 
   /**
-   * Deploy a log source to Vector. NOTE: best-effort — the API returns
-   * success even if Vector is unreachable (it logs a warning). Always confirm
-   * with getLogSourceHealth() before reporting the parser as live.
+   * Publish the working copy as a new active version, then deploy it.
+   *
+   * This is the only path that makes an edited parser_vrl live — deploy on its
+   * own renders the previous active version. Validates the working copy first
+   * and returns `success: false` with the errors if it does not compile,
+   * without creating a version.
+   *
+   * Still best-effort at the Vector reload, exactly like deployLogSource:
+   * confirm with getLogSourceHealth() before reporting the parser as live.
+   */
+  async publishLogSource(id: string): Promise<ApiResponse<DeploymentResult>> {
+    return this.request<DeploymentResult>('POST', `/api/log-sources/${this.encodeId(id)}/publish`);
+  }
+
+  /**
+   * Whether the working copy has unpublished changes, plus the active
+   * version's number and VRL. Use it to tell "my edit is live" from "my edit
+   * is saved but a deploy would ship the old VRL".
+   */
+  async getLogSourceDraftStatus(id: string): Promise<ApiResponse<LogSourceDraftStatus>> {
+    return this.request<LogSourceDraftStatus>(
+      'GET',
+      `/api/log-sources/${this.encodeId(id)}/draft-status`,
+    );
+  }
+
+  /**
+   * Redeploy a log source's ACTIVE VERSION to Vector.
+   *
+   * This does NOT pick up unpublished working-copy edits — call
+   * publishLogSource for those. Use deploy to re-push an unchanged parser
+   * (after a routing change, or to retry a reload).
+   *
+   * NOTE: best-effort — the API returns success even if Vector is unreachable
+   * (it logs a warning). Always confirm with getLogSourceHealth() before
+   * reporting the parser as live.
    */
   async deployLogSource(id: string): Promise<ApiResponse<DeploymentResult>> {
     return this.request<DeploymentResult>('POST', `/api/log-sources/${this.encodeId(id)}/deploy`);

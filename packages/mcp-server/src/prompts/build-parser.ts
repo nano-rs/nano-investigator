@@ -1,7 +1,7 @@
 /**
  * Guided parser-authoring prompt.
  *
- * Scripts the validate → test → save → deploy → confirm loop so an analyst can
+ * Scripts the validate → test → save → publish → confirm loop so an analyst can
  * say "build a parser for this log" and get a disciplined, validator-first
  * workflow instead of a one-shot guess.
  */
@@ -9,7 +9,7 @@
 export const BUILD_PARSER_PROMPT = {
   name: 'build_parser',
   description:
-    'Structured workflow for onboarding a nano log source (Vector VRL parser) from a sample log: read the VRL guide, draft, validate, test against the sample, save as a draft, WIRE ROUTING (routing rule on the ingress), deploy both the ingress and the parser, and confirm events actually flow.',
+    'Structured workflow for onboarding a nano log source (Vector VRL parser) from a sample log: read the VRL guide, draft, validate, test against the sample, save as a working copy, WIRE ROUTING (routing rule on the ingress), deploy the ingress and PUBLISH the parser, and confirm events actually flow.',
   arguments: [
     {
       name: 'source_type',
@@ -57,15 +57,17 @@ Follow this workflow. Do NOT skip validation or testing.
 
 5. **TEST** — call \`test_parse_sample\` with the VRL and the sample line. Inspect \`output.udm.*\`: are IPs, users, timestamps, event_type mapped correctly? \`extracted_field_count\` of 0 or a near-empty \`output.udm\` means the parser isn't actually extracting — fix it. Iterate steps 4–5 until the mapping is right.
 
-6. **SAVE** — call \`create_log_source\` with \`source_type: "routed"\` and \`match_values: ["${sourceType}"]\` (plus name + parser_vrl). This is the routed-feed convention: events arrive on a shared HTTP ingress tagged with a source_type, and the central router dispatches them to the parser whose \`match_values\` include that tag. \`source_type: "routed"\` is the sentinel that opts the parser into that router. Saves a DRAFT; not live yet. (Only skip this for a dedicated pull transport — Kafka/S3/PubSub — where the transport's own config carries the routing.)
+6. **SAVE** — call \`create_log_source\` with \`source_type: "routed"\` and \`match_values: ["${sourceType}"]\` (plus name + parser_vrl). This is the routed-feed convention: events arrive on a shared HTTP ingress tagged with a source_type, and the central router dispatches them to the parser whose \`match_values\` include that tag. \`source_type: "routed"\` is the sentinel that opts the parser into that router. Saves a WORKING COPY; not live yet. (Only skip this for a dedicated pull transport — Kafka/S3/PubSub — where the transport's own config carries the routing.)
 
 7. **WIRE ROUTING** — a parser with no route deploys DEAF (healthy-looking, zero events). Find the ingress the sender will hit: \`list_source_configs\` (usually the \`http\` transport). Confirm what tag the sender sends — for HTTP that's the \`X-Source-Type\` header; ASK me if it might differ from "${sourceType}". Then \`check_rule_reachability\`, and \`create_routing_rule\` on that source config: \`{ match_field: "source_type", match_type: "exact", match_value: "<the sender's tag>", target_source_type: "<the sender's tag>" }\` (target must equal one of the parser's match_values).
 
-8. **DEPLOY BOTH LAYERS** — \`deploy_source_config\` on the ingress (so the new rule takes effect), THEN \`deploy_log_source\` on the parser (so the router picks up its match_values). Order matters. Both are best-effort.
+8. **SHIP BOTH LAYERS** — \`deploy_source_config\` on the ingress (so the new rule takes effect), THEN \`publish_log_source\` on the parser (so the router picks up its match_values and the VRL you just wrote goes live). Order matters. Both are best-effort.
 
-9. **CONFIRM** — deploy is best-effort, so wait ~1 minute then call \`get_log_source_health\`. Report honestly: "deployed, N events seen" vs "deployed but no_data — events may not be arriving, or the sender's tag may not match the rule." If \`no_data\` persists, re-check the sender's tag against the rule with \`check_rule_reachability\`.
+   Use \`publish_log_source\`, NOT \`deploy_log_source\`. Saving writes a working copy; deploy ships the previously PUBLISHED version, so on any parser that has been published before it silently pushes the old VRL and still reports success. Only publish promotes the working copy. Same rule every time you edit an existing parser's VRL later.
 
-Present the VRL and the test output at step 5 before saving. Confirm with me before deploying (steps 7–8) — deploying pushes live config into the ingestion pipeline.`,
+9. **CONFIRM** — publish is best-effort at the Vector reload, so wait ~1 minute then call \`get_log_source_health\`. Report honestly: "published, N events seen" vs "published but no_data — events may not be arriving, or the sender's tag may not match the rule." Parsing is not retroactive: events that arrived BEFORE the publish stay unparsed, so judge only events ingested after it. If \`no_data\` persists, re-check the sender's tag against the rule with \`check_rule_reachability\`; if events arrive but come out unparsed, call \`get_log_source_draft_status\` — \`has_draft_changes: true\` means the VRL never went live.
+
+Present the VRL and the test output at step 5 before saving. Confirm with me before shipping (steps 7–8) — publishing pushes live config into the ingestion pipeline.`,
         },
       },
     ],

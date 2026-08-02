@@ -467,7 +467,7 @@ export async function handleOnboardingTool(
         if (!res.success) return err(res.error?.message ?? 'Failed to create source config');
         return ok({
           ...res.data,
-          note: 'Transport created but NOT deployed. Call deploy_source_config with the returned id, then create + deploy the routed parser (create_log_source / import_parser with dispatch_source_config_id + match_values, then deploy_log_source), and confirm with get_log_source_health.',
+          note: 'Transport created but NOT deployed. Call deploy_source_config with the returned id, then create + publish the routed parser (create_log_source / import_parser with dispatch_source_config_id + match_values, then publish_log_source — deploy_log_source ships the previously published VRL, not your working copy), and confirm with get_log_source_health.',
         });
       }
 

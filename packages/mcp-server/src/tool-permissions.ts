@@ -198,8 +198,13 @@ export const TOOL_PERMISSION_REQUIREMENTS: Record<
   test_parse_live: allOf('log_sources:view', 'search:execute'),
   create_log_source: allOf('log_sources:create'),
   update_log_source: allOf('log_sources:edit'),
+  // Publish creates a version and deploys it in one call; nanosiem-api gates
+  // it on the deploy scope alone (handlers/log_sources.rs publish_log_source),
+  // not on edit — the edit already happened when the working copy was saved.
+  publish_log_source: allOf('log_sources:deploy'),
   deploy_log_source: allOf('log_sources:deploy'),
   undeploy_log_source: allOf('log_sources:deploy'),
+  get_log_source_draft_status: allOf('log_sources:view'),
   get_log_source_health: allOf('log_sources:view'),
   get_log_source_deployments: allOf('log_sources:view'),
   list_source_config_types: allOf('source_configs:view'),

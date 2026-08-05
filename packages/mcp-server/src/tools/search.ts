@@ -354,6 +354,7 @@ export async function handleSearchTool(
           limit,
           table_view: true,
           skip_field_stats: true,
+          skip_histogram: true,
           source_type: sourceType,
         });
 
@@ -364,8 +365,13 @@ export async function handleSearchTool(
           };
         }
 
+        // Agents consume result rows. The search timeline is a second full-window
+        // companion query and can dwarf a bounded aggregate; timechart remains
+        // available because its series is returned in `results`, not here.
+        const compact = { ...result.data };
+        delete compact.histogram;
         return {
-          content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+          content: [{ type: 'text', text: JSON.stringify(compact, null, 2) }],
         };
       }
 

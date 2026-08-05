@@ -17,6 +17,7 @@ export interface SearchRequest {
   limit?: number;
   offset?: number;
   skip_field_stats?: boolean;
+  skip_histogram?: boolean;
   table_view?: boolean;
   source_type?: string;
 }

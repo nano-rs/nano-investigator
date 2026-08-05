@@ -250,6 +250,7 @@ export class NanosiemClient {
       ...req,
       table_view: req.table_view ?? true,
       skip_field_stats: req.skip_field_stats ?? true,
+      skip_histogram: req.skip_histogram ?? true,
     }, { useSearchUrl: true });
   }
 

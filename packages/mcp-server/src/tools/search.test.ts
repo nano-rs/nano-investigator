@@ -104,6 +104,43 @@ describe('handleSearchTool: search_sql time-range defaulting', () => {
   });
 });
 
+describe('handleSearchTool: compact nPL search', () => {
+  it('suppresses the companion histogram in both the request and agent response', async () => {
+    const search = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        results: [{ dest_ip: '203.0.113.10', count: 40 }],
+        total_count: 1,
+        execution_time_ms: 12,
+        fields: [],
+        histogram: [{ time: '2026-08-05T00:00:00Z', count: 900_000 }],
+      },
+    });
+    const client = makeMockClient({ search });
+
+    const result = await handleSearchTool(
+      'search',
+      {
+        query: 'source_type=windows_sysmon | stats count by dest_ip | head 40',
+        start_time: '2026-08-04T00:00:00Z',
+        end_time: '2026-08-05T00:00:00Z',
+        limit: 40,
+      },
+      client,
+    );
+
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({
+      limit: 40,
+      skip_field_stats: true,
+      skip_histogram: true,
+      table_view: true,
+    }));
+    const parsed = JSON.parse(result.content[0].text as string);
+    expect(parsed.results).toEqual([{ dest_ip: '203.0.113.10', count: 40 }]);
+    expect(parsed.histogram).toBeUndefined();
+  });
+});
+
 describe('handleSearchTool: get_schema', () => {
   const udmFields = [
     { name: 'src_ip', column_name: 'src_ip', data_type: 'String', category: 'Network', description: 'Source IP' },

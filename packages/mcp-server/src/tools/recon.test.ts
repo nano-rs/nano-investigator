@@ -629,6 +629,8 @@ describe('recon tool registration', () => {
   it('says plainly on the drafts tool that nothing schedules itself', () => {
     const drafts = TOOLS.find((t) => t.name === 'hunt_propose_drafts')!;
     expect(drafts.description).toContain('NOTHING YOU PROPOSE HERE WILL EVER SCHEDULE ITSELF');
+    expect(drafts.description).toContain('normalized fields');
+    expect(drafts.description).toContain('do not assume a vendor numeric id');
   });
 
   it('tells the model not to supply provenance on save', () => {

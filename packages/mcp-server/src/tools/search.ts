@@ -29,6 +29,113 @@ export function parseRelativeTime(time: string): string {
   );
 }
 
+// MCP search results are for interactive investigation, not bulk export. Keeping
+// this boundary local to the tool prevents a caller from asking the backend for
+// a response large enough to close the MCP transport.
+const DEFAULT_MCP_RESULT_LIMIT = 100;
+const MAX_MCP_RESULT_LIMIT = 1_000;
+// Command renderers can put a second representation of the data inside one
+// reserved metadata row. In particular, `| lateral` carries a complete graph
+// under `_lateral_graph`, outside normal row pagination. Keep small graphs for
+// clients that render them, but do not let one nested object bypass the MCP's
+// bounded-output contract. Half of PIVT's 128 KiB spill threshold leaves room
+// for the actual page and JSON-RPC envelope.
+const MAX_MCP_LATERAL_GRAPH_BYTES = 64 * 1024;
+
+function mcpResultLimit(value: unknown, toolName: string): number {
+  const limit = value === undefined ? DEFAULT_MCP_RESULT_LIMIT : value;
+  if (typeof limit !== 'number' || !Number.isInteger(limit) || limit < 1) {
+    throw new Error(`${toolName} limit must be a positive integer.`);
+  }
+  if (limit > MAX_MCP_RESULT_LIMIT) {
+    throw new Error(
+      `${toolName} limit ${limit} exceeds the MCP safety ceiling of ${MAX_MCP_RESULT_LIMIT} rows. ` +
+      'Narrow the query, request a top-N aggregate, or use the nano UI/export path for bulk results.',
+    );
+  }
+  return limit;
+}
+
+function resultLimitViolation(returnedRows: number, requestedLimit: number): ToolResult {
+  return err(
+    `Search result withheld: nano returned ${returnedRows} rows after the MCP requested a limit of ${requestedLimit}. ` +
+    'This usually means the nano backend did not apply the output limit after a high-cardinality stats/timechart aggregation. ' +
+    `For a top-N result, sort first and append \`| head ${requestedLimit}\`; otherwise add filters or lower cardinality. ` +
+    'Upgrade the nano backend if the query is already bounded and this error persists. ' +
+    'No rows were returned to protect the MCP connection; do not interpret this error as zero matches.',
+  );
+}
+
+function returnedDataRowCount(rows: Record<string, unknown>[]): number {
+  // Nano prepends at most one command-renderer metadata row. Excluding every
+  // `_display_type`-shaped row would let a computed or malformed result evade
+  // the MCP row ceiling, so only the first reserved row receives that treatment.
+  let metadataConsumed = false;
+  return rows.reduce((count, row) => {
+    const isMetadata = !metadataConsumed
+      && row !== null
+      && typeof row === 'object'
+      && !Array.isArray(row)
+      && Object.prototype.hasOwnProperty.call(row, '_display_type');
+    if (isMetadata) {
+      metadataConsumed = true;
+      return count;
+    }
+    return count + 1;
+  }, 0);
+}
+
+function compactLateralGraphMetadata(
+  rows: Record<string, unknown>[],
+  requestedDataRows: number,
+): Record<string, unknown>[] {
+  return rows.map((row) => {
+    if (row._display_type !== 'lateral' || row._lateral_graph === undefined) {
+      return row;
+    }
+
+    const graphJson = JSON.stringify(row._lateral_graph);
+    const graphBytes = Buffer.byteLength(graphJson, 'utf8');
+    const graph = row._lateral_graph;
+    const graphRecord = graph !== null && typeof graph === 'object' && !Array.isArray(graph)
+      ? graph as Record<string, unknown>
+      : {};
+    const arrayLength = (key: string): number | null => {
+      const value = graphRecord[key];
+      return Array.isArray(value) ? value.length : null;
+    };
+    const edgeCount = arrayLength('edges');
+    const exceedsByteBudget = graphBytes > MAX_MCP_LATERAL_GRAPH_BYTES;
+    const exceedsRowBudget = edgeCount !== null && edgeCount > requestedDataRows;
+    if (!exceedsByteBudget && !exceedsRowBudget) {
+      return row;
+    }
+
+    const reasons = [
+      exceedsByteBudget
+        ? `serialized size ${graphBytes} exceeded ${MAX_MCP_LATERAL_GRAPH_BYTES} bytes`
+        : null,
+      exceedsRowBudget
+        ? `${edgeCount} nested edges exceeded the requested ${requestedDataRows} data rows`
+        : null,
+    ].filter((reason): reason is string => reason !== null);
+
+    return {
+      ...row,
+      _lateral_graph: {
+        _mcp_omitted: true,
+        original_bytes: graphBytes,
+        original_node_count: arrayLength('nodes'),
+        original_edge_count: edgeCount,
+        requested_data_row_limit: requestedDataRows,
+        reason: `The lateral renderer graph was omitted at the MCP boundary: ${reasons.join('; ')}.`,
+        guidance:
+          'Use the returned lateral edge rows for analysis. Narrow the seed/window before requesting another graph; this response contains no partial graph data.',
+      },
+    };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Tool definitions
 // ---------------------------------------------------------------------------
@@ -51,7 +158,7 @@ const TOOL_DEFINITIONS = [
       '  3. `lower()` consistency — case-sensitive fields like `source_type` need `lower()` on both sides of the comparison.\n' +
       '  4. **`ext` is a ClickHouse JSON column** — access with `ext.field_name` or `ext[\'field_name\']`, NOT JSONExtract. Use JSONExtract only on the legacy `metadata` String column.\n' +
       '  5. UDM columns are real columns (src_ip, process_name, user, file_hash, etc.) — access directly, never through `ext`.\n' +
-      '  6. Always include an explicit LIMIT. Default 100 unless the user asks otherwise. Backend caps at 100k.\n' +
+      `  6. Always include an explicit LIMIT. Default ${DEFAULT_MCP_RESULT_LIMIT}; the interactive MCP surface refuses more than ${MAX_MCP_RESULT_LIMIT} returned rows.\n` +
       '  7. Tables (allowlisted): `logs` (raw events), `signals` (detection matches), `*_prevalence_summary` / `*_prevalence_agg` (prevalence — AggregatingMergeTree, query with uniqMerge for host_count), `identity_observations` (use ASOF JOIN for IP→hostname enrichment).\n' +
       '\n' +
       'TIME RANGE:\n' +
@@ -85,8 +192,10 @@ const TOOL_DEFINITIONS = [
           description: 'End of the time range envelope. Relative, "now", or ISO 8601. Optional — defaults to "now".',
         },
         limit: {
-          type: 'number',
-          description: 'Maximum result rows (backend cap is 100k).',
+          type: 'integer',
+          minimum: 1,
+          maximum: MAX_MCP_RESULT_LIMIT,
+          description: `Maximum returned rows. Defaults to ${DEFAULT_MCP_RESULT_LIMIT}; MCP safety maximum is ${MAX_MCP_RESULT_LIMIT}.`,
         },
       },
       required: ['sql'],
@@ -128,6 +237,10 @@ const TOOL_DEFINITIONS = [
       '\n' +
       'Use `search_sql` only when nPL cannot express the query, such as a cross-table join, a prevalence-state aggregate, or direct `ext` JSON access.\n' +
       '\n' +
+      `RESULT BOUNDARY: \`limit\` caps returned rows or aggregate groups, not the matching events used to compute an aggregate. The MCP surface refuses requests above ${MAX_MCP_RESULT_LIMIT} rows and returns an actionable error if an older backend violates the requested limit; it never silently slices aggregate output. For a meaningful top-N, sort before \`head\`/\`limit\`.\n` +
+      '\n' +
+      'REX QUOTING: If a regex contains JSON-style double quotes, wrap the whole pattern in SINGLE quotes: `| rex field=message \'"KEY":"(?<value>[^\"]+)"\'`. Backslash does not escape a double-quoted nPL delimiter; this spelling also works on older nano backends.\n' +
+      '\n' +
       'Examples:\n' +
       '  - "src_ip=10.0.0.0/8 | stats count by dest_ip, dest_port | sort -count"\n' +
       '  - "process_name=powershell.exe | table timestamp, user, command_line"\n' +
@@ -150,8 +263,10 @@ const TOOL_DEFINITIONS = [
           description: 'End of the search window. Defaults to "now". Relative or ISO 8601 timestamp.',
         },
         limit: {
-          type: 'number',
-          description: 'Maximum number of results to return. Defaults to 100.',
+          type: 'integer',
+          minimum: 1,
+          maximum: MAX_MCP_RESULT_LIMIT,
+          description: `Maximum returned events or aggregate groups. Defaults to ${DEFAULT_MCP_RESULT_LIMIT}; this does not limit the events aggregated. MCP safety maximum is ${MAX_MCP_RESULT_LIMIT}.`,
         },
         source_type: {
           type: 'string',
@@ -191,8 +306,11 @@ const TOOL_DEFINITIONS = [
     name: 'get_field_values',
     annotations: { readOnlyHint: true },
     description:
-      'Retrieve the top values for a specific field in the log data. ' +
-      'Returns value, count, and percentage for each top value. ' +
+      'Retrieve a limited, ranked list of the top values for a specific field in the log data. ' +
+      'This is a value-discovery tool, not a population count or statistical sample. Counts cover only the returned top values; ' +
+      'their sum is not the total number of matching events, and percentages are each value\'s share of the returned top-value counts only. ' +
+      'The response reports `matching_event_count: null` deliberately. Use `search` with the same scope and an explicit `| stats count` ' +
+      'when the investigation needs the matching population total. ' +
       'Useful for understanding the distribution of a field (e.g. top source IPs, most common process names, ' +
       'frequent user agents) or identifying outliers during threat hunting.',
     inputSchema: {
@@ -215,8 +333,10 @@ const TOOL_DEFINITIONS = [
           description: 'End of the time range. Defaults to "now". Relative or ISO 8601 timestamp.',
         },
         limit: {
-          type: 'number',
-          description: 'Maximum number of top values to return.',
+          type: 'integer',
+          minimum: 1,
+          maximum: MAX_MCP_RESULT_LIMIT,
+          description: `Maximum number of ranked values to return. Defaults to ${DEFAULT_MCP_RESULT_LIMIT}; does not turn the result into a sample or population total.`,
         },
       },
       required: ['field', 'start_time'],
@@ -345,7 +465,7 @@ export async function handleSearchTool(
         const query = args.query as string;
         const startTime = parseRelativeTime(args.start_time as string);
         const endTime = parseRelativeTime((args.end_time as string) ?? 'now');
-        const limit = (args.limit as number) ?? 100;
+        const limit = mcpResultLimit(args.limit, 'search');
         const sourceType = args.source_type as string | undefined;
 
         const result = await client.search({
@@ -365,10 +485,22 @@ export async function handleSearchTool(
           };
         }
 
+        // Command-page renderers may prepend a reserved metadata row (for
+        // example `{ _display_type: 'lateral', ... }`) outside data
+        // pagination. It must survive in the response, but it is not one of
+        // the caller's requested result rows.
+        const returnedRows = returnedDataRowCount(result.data?.results ?? []);
+        if (returnedRows > limit) {
+          return resultLimitViolation(returnedRows, limit);
+        }
+
         // Agents consume result rows. The search timeline is a second full-window
         // companion query and can dwarf a bounded aggregate; timechart remains
         // available because its series is returned in `results`, not here.
         const compact = { ...result.data };
+        if (compact.results) {
+          compact.results = compactLateralGraphMetadata(compact.results, limit);
+        }
         delete compact.histogram;
         return {
           content: [{ type: 'text', text: JSON.stringify(compact, null, 2) }],
@@ -382,7 +514,7 @@ export async function handleSearchTool(
         const sql = args.sql as string;
         const endTime = parseRelativeTime((args.end_time as string) ?? 'now');
         const startTime = parseRelativeTime((args.start_time as string) ?? '-24h');
-        const limit = args.limit as number | undefined;
+        const limit = mcpResultLimit(args.limit, 'search_sql');
 
         const result = await client.searchSql({
           sql,
@@ -395,6 +527,11 @@ export async function handleSearchTool(
             content: [{ type: 'text', text: `Error: ${result.error?.message ?? 'SQL search failed'}` }],
             isError: true,
           };
+        }
+
+        const returnedRows = result.data?.results?.length ?? 0;
+        if (returnedRows > limit) {
+          return resultLimitViolation(returnedRows, limit);
         }
 
         return {
@@ -489,7 +626,7 @@ export async function handleSearchTool(
         const query = (args.query as string) ?? '*';
         const startTime = parseRelativeTime(args.start_time as string);
         const endTime = parseRelativeTime((args.end_time as string) ?? 'now');
-        const limit = args.limit as number | undefined;
+        const limit = mcpResultLimit(args.limit, 'get_field_values');
 
         const result = await client.getFieldValues({
           field,
@@ -506,8 +643,40 @@ export async function handleSearchTool(
           };
         }
 
+        const values = result.data?.values ?? [];
+        if (values.length > limit) {
+          return resultLimitViolation(values.length, limit);
+        }
+
+        // The backend's legacy `total_count` and `percentage` fields are both
+        // based on the limited top-value rows. Rename and recompute them at the
+        // MCP boundary so an agent cannot mistake either for dataset coverage.
+        const returnedValueOccurrenceCount = values.reduce((sum, value) => sum + value.count, 0);
+        const formatted = {
+          field: result.data?.field ?? field,
+          coverage: {
+            kind: 'top_values_only',
+            requested_limit: limit,
+            returned_value_count: values.length,
+            returned_value_occurrence_count: returnedValueOccurrenceCount,
+            may_have_more_values: result.data?.may_have_more_values ?? values.length >= limit,
+            matching_event_count: null,
+            matching_event_count_available: false,
+          },
+          values: values.map((value) => ({
+            value: value.value,
+            count: value.count,
+            percentage_of_returned_value_occurrences: returnedValueOccurrenceCount > 0
+              ? (value.count / returnedValueOccurrenceCount) * 100
+              : 0,
+          })),
+          guidance:
+            'These are only the returned top values. Their counts are not a sample or the total matching population. ' +
+            'Run the same scoped query with an explicit `| stats count` when you need a matching-event total.',
+        };
+
         return {
-          content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+          content: [{ type: 'text', text: JSON.stringify(formatted, null, 2) }],
         };
       }
 

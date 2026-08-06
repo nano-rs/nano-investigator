@@ -186,7 +186,10 @@ export const TOOL_PERMISSION_REQUIREMENTS: Record<
     { allOf: ['detections:view'] },
     { allOf: ['source_scopes:view'] },
   ),
-  get_org_context: allOf('settings:ai'),
+  get_org_context: alternatives(
+    { allOf: ['settings:view'], when: 'read-only settings authority' },
+    { allOf: ['settings:ai'], when: 'legacy AI settings authority' },
+  ),
   health_check: permissionless,
   get_audit_trail: allOf('audit:view'),
 

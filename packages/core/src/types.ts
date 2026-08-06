@@ -82,12 +82,25 @@ export interface FieldValuesRequest {
 export interface FieldValueInfo {
   value: string;
   count: number;
+  /**
+   * Legacy API field: share of the occurrence sum for the limited values in
+   * this response. This is not a percentage of the full matching population.
+   */
   percentage: number;
 }
 
 export interface FieldValuesResponse {
   field: string;
   values: FieldValueInfo[];
+  /** Explicit top-N coverage metadata returned by newer nano endpoints. */
+  returned_value_count?: number;
+  covered_event_count?: number;
+  may_have_more_values?: boolean;
+  /**
+   * Legacy API field: sum of `count` across the returned, limit-capped values.
+   * It is not the total matching event count. MCP consumers should use the
+   * explicit coverage envelope emitted by `get_field_values` instead.
+   */
   total_count: number;
 }
 

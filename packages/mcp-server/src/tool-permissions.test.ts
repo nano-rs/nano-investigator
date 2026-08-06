@@ -77,4 +77,14 @@ describe('tool permission metadata', () => {
       alternatives: [{ allOf: [] }],
     });
   });
+
+  it('keeps organizational context on read-only settings authority', () => {
+    expect(TOOL_PERMISSION_REQUIREMENTS.get_org_context).toEqual({
+      version: 1,
+      alternatives: [
+        { allOf: ['settings:view'], when: 'read-only settings authority' },
+        { allOf: ['settings:ai'], when: 'legacy AI settings authority' },
+      ],
+    });
+  });
 });

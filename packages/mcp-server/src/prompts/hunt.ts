@@ -145,7 +145,7 @@ Time range: ${timeRange}
 ## Step 2: BUILD AND RUN QUERIES
 - Run each query with the ${timeRange} lookback
 - For each query, assess:
-  - Any hits? If 0, check field values and adjust.
+  - Any hits? If 0, check field values and adjust. Field values are limited top-value discovery only; use \`| stats count\` for volume rather than summing their counts.
   - False positive rate — are hits expected behavior or suspicious?
   - Volume — manageable for analysis or needs narrowing?
 

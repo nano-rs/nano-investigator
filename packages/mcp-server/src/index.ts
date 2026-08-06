@@ -68,6 +68,8 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { NanosiemClient } from '@nano-rs/investigator-core';
 
+declare const __PACKAGE_VERSION__: string;
+
 // Tools
 import { TOOLS as SEARCH_TOOLS, handleSearchTool } from './tools/search.js';
 import { TOOLS as ALERTS_TOOLS, handleAlertsTool } from './tools/alerts.js';
@@ -164,7 +166,7 @@ function getClient(): NanosiemClient {
 const server = new Server(
   {
     name: 'nano-investigator',
-    version: '0.1.8',
+    version: __PACKAGE_VERSION__,
   },
   {
     capabilities: {

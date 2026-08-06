@@ -123,6 +123,17 @@ Prefix with \`-\` for descending order.
 | eval cmd_length = len(command_line)
 \`\`\`
 
+### rex — Extract fields with regular expressions
+\`\`\`
+| rex field=message '(?<user>[A-Za-z0-9._-]+)'
+| rex field=message '"FILE_PATH":"(?<path>[^\"]+)"'
+\`\`\`
+
+When a pattern contains JSON-style double quotes, wrap the entire pattern in
+single quotes. In nPL a backslash does not escape a double-quoted delimiter, so
+the familiar SPL spelling \`"\\"KEY\\":..."\` is less portable than
+\`'"KEY":...'\` and can fail on older nano backends.
+
 ### prevalence — Filter by prevalence
 \`\`\`
 | prevalence process_hash < 5
@@ -190,8 +201,11 @@ is much faster than:
 event_id=4625
 \`\`\`
 
-### Stats queries return all groups
-Event queries respect the limit parameter. Stats/timechart queries return all result groups (usually small). If a stats query returns too many groups, add more filters or increase the \`where\` threshold.
+### Aggregations preserve input and bound output
+The limit parameter caps returned events or aggregate groups; it must not truncate the matching events used to compute stats/timechart values. For a meaningful top-N aggregate, sort before \`head\`/\`limit\`. If a high-cardinality aggregation cannot honor the requested output limit, the MCP tool returns an explicit error instead of risking a connection close or silently slicing groups.
+
+### Field values are top-value discovery, not a population estimate
+\`get_field_values\` returns only the limited top values. Its counts and percentages describe that returned list; their sum is neither a sample total nor the full matching event count. Use the same scoped query with an explicit \`| stats count\` when you need the population total.
 
 ### Free text search uses bloom filters
 When you search free text in nPL, it compiles to \`hasToken(message_search, lower('term'))\` which leverages bloom filter indexes. This is fast.

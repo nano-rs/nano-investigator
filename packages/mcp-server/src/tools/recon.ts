@@ -590,7 +590,7 @@ const TOOL_DEFINITIONS = [
       '\n' +
       'Fewer, better drafts. The server caps a request at ' + MAX_DRAFTS_PER_CALL + '; a fresh deployment has hundreds of gaps, and a library nobody reads buries the handful that matter. Rank by what this estate would plausibly suffer given the fingerprint you just wrote, and offer the best few. The next run offers the next few.\n' +
       '\n' +
-      'Each draft is a thing a human will edit, so write it for them: a `doc` saying what to look for, why it is worth looking HERE, and how to judge a hit; a `sweep_query` that is a real opening nPL query (rare combinations of entity fields are usually the right opening move); `required_source_types` naming telemetry the census showed is live.\n' +
+      'Each draft is a thing a human will edit, so write it for them: a `doc` saying what to look for, why it is worth looking HERE, and how to judge a hit; a `sweep_query` that is a real opening nPL query (rare combinations of entity fields are usually the right opening move); `required_source_types` naming telemetry the census showed is live. Build the opening from normalized fields the census or your probes showed are populated. Prefer canonical behaviour such as `event_type`; do not assume a vendor numeric id such as `signature_id` exists just because that source normally emits one.\n' +
       '\n' +
       '`category` is what the hunt READS, not what it is looking for — a lateral-movement hunt over Okta logs is `identity`.\n' +
       '\n' +
@@ -619,7 +619,7 @@ const TOOL_DEFINITIONS = [
               },
               sweep_query: {
                 type: 'string',
-                description: 'The opening nPL query a human will edit. Make it one that actually runs.',
+                description: 'The opening nPL query a human will edit. Use normalized fields the census/probes showed are populated; do not guess vendor-id population.',
               },
               required_source_types: {
                 type: 'array',

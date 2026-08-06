@@ -140,6 +140,8 @@ When unexpected results:
 2. Check get_field_values for correct filter values
 3. Try a more specific source_type
 
+`get_field_values` is for discovering and ranking values, not estimating volume. It returns only the limited top values; their counts and percentages cover that returned list, not the full matching population. Never sum them into a sampled or total event count. Use the same scoped query with an explicit `| stats count` when a population total is required.
+
 ## Depth Control
 
 | Level | Tool Calls | When |

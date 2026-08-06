@@ -60,6 +60,16 @@ describe('TOOLS registration', () => {
     const npl = TOOLS.find((t) => t.name === 'search');
     expect(npl!.description).toContain('PRIMARY search tool');
     expect(npl!.description).toContain('Use `search_sql` only when nPL cannot express');
+    expect(npl!.description).toContain('never silently slices aggregate output');
+    expect(npl!.description).toContain('REX QUOTING');
+    expect(npl!.description).toContain('wrap the whole pattern in SINGLE quotes');
+  });
+
+  it('get_field_values describes top-value coverage without implying a population total', () => {
+    const fieldValues = TOOLS.find((t) => t.name === 'get_field_values');
+    expect(fieldValues!.description).toContain('not a population count or statistical sample');
+    expect(fieldValues!.description).toContain('matching_event_count: null');
+    expect(fieldValues!.description).toContain('`| stats count`');
   });
 });
 
@@ -80,6 +90,7 @@ describe('handleSearchTool: search_sql time-range defaulting', () => {
     const startMs = new Date(arg.time_range.start).getTime();
     const endMs = new Date(arg.time_range.end).getTime();
     const spanMs = endMs - startMs;
+    expect(arg.limit).toBe(100);
     expect(spanMs).toBeGreaterThanOrEqual(23 * 3600 * 1000);
     expect(spanMs).toBeLessThanOrEqual(25 * 3600 * 1000);
   });
@@ -138,6 +149,245 @@ describe('handleSearchTool: compact nPL search', () => {
     const parsed = JSON.parse(result.content[0].text as string);
     expect(parsed.results).toEqual([{ dest_ip: '203.0.113.10', count: 40 }]);
     expect(parsed.histogram).toBeUndefined();
+  });
+
+  it('withholds an over-limit aggregate instead of silently truncating it', async () => {
+    const search = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        results: [
+          { dest_ip: 'first', count: 30 },
+          { dest_ip: 'second', count: 20 },
+          { dest_ip: 'secret-third', count: 10 },
+        ],
+      },
+    });
+    const client = makeMockClient({ search });
+
+    const result = await handleSearchTool(
+      'search',
+      {
+        query: 'source_type=firewall | stats count by dest_ip',
+        start_time: '-1h',
+        limit: 2,
+      },
+      client,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('returned 3 rows');
+    expect(result.content[0].text).toContain('limit of 2');
+    expect(result.content[0].text).toContain('| head 2');
+    expect(result.content[0].text).toContain('Upgrade the nano backend');
+    expect(result.content[0].text).toContain('do not interpret this error as zero matches');
+    expect(result.content[0].text).not.toContain('secret-third');
+  });
+
+  it('returns an aggregate that exactly meets the requested limit', async () => {
+    const rows = [
+      { dest_ip: 'first', count: 30 },
+      { dest_ip: 'second', count: 20 },
+    ];
+    const search = vi.fn().mockResolvedValue({ success: true, data: { results: rows } });
+    const client = makeMockClient({ search });
+
+    const result = await handleSearchTool(
+      'search',
+      { query: '* | stats count by dest_ip', start_time: '-1h', limit: 2 },
+      client,
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(JSON.parse(result.content[0].text as string).results).toEqual(rows);
+  });
+
+  it('does not count a reserved display metadata row against the data-row limit', async () => {
+    const graph = {
+      nodes: [{ id: 'first', type: 'host' }, { id: 'second', type: 'host' }],
+      edges: [{ from: 'first', to: 'second', method: 'network-ssh' }],
+      evidence: {},
+    };
+    const rows = [
+      { _display_type: 'lateral', _lateral_graph: graph },
+      { src_host: 'first', dest_host: 'second' },
+      { src_host: 'second', dest_host: 'third' },
+    ];
+    const search = vi.fn().mockResolvedValue({ success: true, data: { results: rows } });
+    const client = makeMockClient({ search });
+
+    const result = await handleSearchTool(
+      'search',
+      { query: '* | lateral src_host -> dest_host', start_time: '-1h', limit: 2 },
+      client,
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(JSON.parse(result.content[0].text as string).results).toEqual(rows);
+  });
+
+  it('excludes at most one display metadata row from the result ceiling', async () => {
+    const rows = [
+      { _display_type: 'lateral', _lateral_graph: { nodes: [], edges: [] } },
+      { _display_type: 'lateral', _lateral_graph: { nodes: [], edges: [] } },
+      { src_host: 'first', dest_host: 'second' },
+    ];
+    const search = vi.fn().mockResolvedValue({ success: true, data: { results: rows } });
+    const client = makeMockClient({ search });
+
+    const result = await handleSearchTool(
+      'search',
+      { query: '* | lateral src_host -> dest_host', start_time: '-1h', limit: 1 },
+      client,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('returned 2 rows');
+  });
+
+  it('omits an oversized nested lateral graph instead of returning partial graph data', async () => {
+    const graph = {
+      // Match nano's real renderer ceiling: at most 200 nodes, with a denser
+      // edge/evidence payload capable of exceeding the wire budget.
+      nodes: Array.from({ length: 200 }, (_, index) => ({
+        id: `host-${index}`,
+        type: 'host',
+        label: `host-${index}`,
+      })),
+      edges: Array.from({ length: 400 }, (_, index) => ({
+        from: `host-${index}`,
+        to: `host-${index + 1}`,
+        method: 'network-ssh',
+        detail: `sensitive-edge-${index}-${'x'.repeat(256)}`,
+      })),
+      evidence: {},
+    };
+    const rows = [
+      { _display_type: 'lateral', _lateral_graph: graph },
+      { src_host: 'first', dest_host: 'second' },
+    ];
+    const search = vi.fn().mockResolvedValue({ success: true, data: { results: rows } });
+    const client = makeMockClient({ search });
+
+    const result = await handleSearchTool(
+      'search',
+      { query: '* | lateral src_host -> dest_host', start_time: '-1h', limit: 1 },
+      client,
+    );
+
+    expect(result.isError).not.toBe(true);
+    const text = result.content[0].text as string;
+    const parsed = JSON.parse(text);
+    expect(parsed.results[1]).toEqual(rows[1]);
+    expect(parsed.results[0]._lateral_graph).toMatchObject({
+      _mcp_omitted: true,
+      original_node_count: 200,
+      original_edge_count: 400,
+      requested_data_row_limit: 1,
+    });
+    expect(parsed.results[0]._lateral_graph.original_bytes).toBeGreaterThan(64 * 1024);
+    expect(parsed.results[0]._lateral_graph).not.toHaveProperty('nodes');
+    expect(parsed.results[0]._lateral_graph).not.toHaveProperty('edges');
+    expect(parsed.results[0]._lateral_graph.guidance).toContain('no partial graph data');
+    expect(text).not.toContain('sensitive-edge-399');
+    expect(Buffer.byteLength(text, 'utf8')).toBeLessThan(8 * 1024);
+  });
+
+  it('omits a small-byte graph whose nested edges exceed the requested row budget', async () => {
+    const graph = {
+      nodes: [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
+      edges: [
+        { from: 'a', to: 'b' },
+        { from: 'b', to: 'c' },
+      ],
+    };
+    const rows = [
+      { _display_type: 'lateral', _lateral_graph: graph },
+      { src_host: 'a', dest_host: 'b' },
+    ];
+    const search = vi.fn().mockResolvedValue({ success: true, data: { results: rows } });
+    const client = makeMockClient({ search });
+
+    const result = await handleSearchTool(
+      'search',
+      { query: '* | lateral src_host -> dest_host', start_time: '-1h', limit: 1 },
+      client,
+    );
+
+    const graphResult = JSON.parse(result.content[0].text as string).results[0]._lateral_graph;
+    expect(graphResult).toMatchObject({
+      _mcp_omitted: true,
+      original_edge_count: 2,
+      requested_data_row_limit: 1,
+    });
+    expect(graphResult.reason).toContain('nested edges exceeded');
+    expect(graphResult).not.toHaveProperty('edges');
+  });
+
+  it('rejects a request above the MCP safety ceiling before calling nano', async () => {
+    const search = vi.fn();
+    const client = makeMockClient({ search });
+
+    const result = await handleSearchTool(
+      'search',
+      { query: '*', start_time: '-1h', limit: 1_001 },
+      client,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('safety ceiling of 1000 rows');
+    expect(search).not.toHaveBeenCalled();
+  });
+});
+
+describe('handleSearchTool: get_field_values coverage', () => {
+  it('renames limited coverage fields and does not expose a matching total', async () => {
+    const getFieldValues = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        field: 'source_type',
+        values: [
+          { value: 'windows', count: 80, percentage: 0.008 },
+          { value: 'dns', count: 20, percentage: 0.002 },
+        ],
+        may_have_more_values: true,
+        // The legacy backend total is deliberately misleading here. The MCP
+        // response must derive and label only its returned-value coverage.
+        total_count: 999_999,
+      },
+    });
+    const client = makeMockClient({ getFieldValues });
+
+    const result = await handleSearchTool(
+      'get_field_values',
+      { field: 'source_type', start_time: '-1h', limit: 2 },
+      client,
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(getFieldValues).toHaveBeenCalledWith(expect.objectContaining({
+      field: 'source_type',
+      query: '*',
+      limit: 2,
+    }));
+
+    const parsed = JSON.parse(result.content[0].text as string);
+    expect(parsed).not.toHaveProperty('total_count');
+    expect(parsed.coverage).toEqual({
+      kind: 'top_values_only',
+      requested_limit: 2,
+      returned_value_count: 2,
+      returned_value_occurrence_count: 100,
+      may_have_more_values: true,
+      matching_event_count: null,
+      matching_event_count_available: false,
+    });
+    expect(parsed.values).toEqual([
+      { value: 'windows', count: 80, percentage_of_returned_value_occurrences: 80 },
+      { value: 'dns', count: 20, percentage_of_returned_value_occurrences: 20 },
+    ]);
+    expect(parsed.values[0]).not.toHaveProperty('percentage');
+    expect(parsed.guidance).toContain('not a sample or the total matching population');
+    expect(parsed.guidance).toContain('| stats count');
   });
 });
 

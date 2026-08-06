@@ -199,16 +199,35 @@ export class NanosiemClient {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
+        const parsedErrorBody: unknown = await response.json().catch(() => ({}));
+        const errorBody =
+          parsedErrorBody !== null &&
+          typeof parsedErrorBody === 'object' &&
+          !Array.isArray(parsedErrorBody)
+            ? parsedErrorBody as Record<string, unknown>
+            : {};
+        const requestId = response.headers.get('x-request-id');
+        const cloudflareRay = response.headers.get('cf-ray');
+        const diagnostics = [
+          `HTTP ${response.status}`,
+          requestId ? `request_id=${requestId}` : undefined,
+          cloudflareRay ? `cf_ray=${cloudflareRay}` : undefined,
+        ].filter((value): value is string => value !== undefined);
+        const serverMessage =
+          (errorBody as { error?: { message?: string } }).error?.message ||
+          (errorBody as { message?: string }).message ||
+          response.statusText;
         return {
           success: false,
           error: {
             code: `HTTP_${response.status}`,
-            message:
-              (errorBody as { error?: { message?: string } }).error?.message ||
-              (errorBody as { message?: string }).message ||
-              response.statusText,
-            details: errorBody as Record<string, unknown>,
+            message: `${serverMessage} (${diagnostics.join('; ')})`,
+            details: {
+              ...errorBody,
+              http_status: response.status,
+              ...(requestId ? { request_id: requestId } : {}),
+              ...(cloudflareRay ? { cloudflare_ray: cloudflareRay } : {}),
+            },
           },
         };
       }

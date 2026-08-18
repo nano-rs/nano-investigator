@@ -121,6 +121,115 @@ export interface UdmFieldsResponse {
 }
 
 // ============================================================================
+// Schema-profile Types (NAN-2373)
+//
+// `/api/udm/fields` is hardcoded to the UDM field universe and is blind to the
+// deployment's active schema. `/api/schema/fields` (NAN-1241) returns whichever
+// profile the deployment booted with, plus the discriminator naming it. Every
+// field-name decision has to come from the second one, or an OCSF deployment is
+// handed a UDM column list none of whose names exist.
+// ============================================================================
+
+export type SchemaId = 'udm' | 'ocsf';
+
+export interface SchemaFieldInfo {
+  /** Queryable field name. On OCSF these are dotted paths (`actor.user.name`). */
+  name: string;
+  type: string;
+  category: string;
+  entity_type?: string | null;
+  /** Field is PREWHERE-eligible in the profile's storage layout. */
+  prewhere?: boolean;
+  /** Profile declares a `<name>.search` companion for this field. */
+  search?: boolean;
+}
+
+export interface SchemaFieldsResponse {
+  schema: SchemaId;
+  fields: SchemaFieldInfo[];
+}
+
+// ============================================================================
+// Async / durable search jobs (NAN-2373)
+//
+// On a lake deployment `/api/search` answers a query that exceeds its scan
+// budget with a durable job handle instead of rows, stamping
+// `x-nano-query-escalated: durable-job`. A caller that only understands the
+// synchronous shape reads that 200 as an empty result set.
+// ============================================================================
+
+export interface AsyncSearchAck {
+  job_id: string;
+  status: string;
+}
+
+export type SearchOrJobResponse = SearchResponse | AsyncSearchAck;
+
+export function isAsyncSearchAck(value: unknown): value is AsyncSearchAck {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    typeof (value as AsyncSearchAck).job_id === 'string' &&
+    !Array.isArray((value as SearchResponse).results)
+  );
+}
+
+export interface SearchJobProgress {
+  rows_scanned?: number;
+  rows_total?: number;
+  percent?: number;
+  elapsed_ms?: number;
+}
+
+export interface SearchJobResultSummary {
+  rows: number;
+  pages: number;
+  page_rows: number;
+  has_more?: boolean;
+}
+
+export interface SearchJobStatusResponse {
+  job_id: string;
+  status: string;
+  progress?: SearchJobProgress;
+  /** Completed in-memory job: the whole response, same shape as a sync search. */
+  result?: SearchResponse;
+  /** Completed durable job: pagination metadata; rows come from the page route. */
+  durable_result?: SearchJobResultSummary;
+  error?: string;
+  queue_position?: number;
+  estimated_wait_seconds?: number;
+  task_kind?: string;
+  query?: string;
+}
+
+export interface SearchJobResultPage {
+  page: number;
+  pages: number;
+  total_rows: number;
+  row_offset: number;
+  rows: Record<string, unknown>[];
+}
+
+// ============================================================================
+// Deployment capabilities
+// ============================================================================
+
+export interface CapabilitiesResponse {
+  edition: string;
+  version: string;
+  capabilities: Record<string, boolean>;
+  /**
+   * Active log-query backend, when the deployment publishes it. Older builds
+   * omit the field entirely, which is why it is optional and why the MCP also
+   * learns the answer from how the backend actually behaves.
+   */
+  logQueryBackend?: 'clickhouse' | 'lake';
+  /** Active schema profile, when published here. Authoritative source is `/api/schema/fields`. */
+  schemaProfile?: SchemaId;
+}
+
+// ============================================================================
 // Saved Search Types
 // ============================================================================
 

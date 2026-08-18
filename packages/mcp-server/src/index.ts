@@ -92,6 +92,7 @@ import { UDM_SCHEMA_RESOURCE, UDM_SCHEMA_CONTENT, UDM_SCHEMA_URI } from './resou
 import { NPL_REFERENCE_RESOURCE, NPL_REFERENCE_CONTENT, NPL_REFERENCE_URI } from './resources/npl-reference.js';
 import { SQL_GUIDE_RESOURCE, SQL_GUIDE_CONTENT, SQL_GUIDE_URI } from './resources/sql-guide.js';
 import { VRL_PARSERS_RESOURCE, VRL_PARSERS_CONTENT, VRL_PARSERS_URI } from './resources/vrl-parsers.js';
+import { OCSF_SCHEMA_RESOURCE, OCSF_SCHEMA_CONTENT, OCSF_SCHEMA_URI } from './resources/ocsf-schema.js';
 import { getPlaybookResources, getPlaybookContent, PLAYBOOK_URI_PREFIX } from './resources/playbooks.js';
 
 // Prompts
@@ -99,6 +100,7 @@ import { INVESTIGATE_PROMPT, getInvestigatePrompt } from './prompts/investigate.
 import { HUNT_ENTITY_PROMPT, HUNT_CAMPAIGN_PROMPT, getHuntEntityPrompt, getHuntCampaignPrompt } from './prompts/hunt.js';
 import { MORNING_BRIEFING_PROMPT, getMorningBriefingPrompt } from './prompts/triage.js';
 import { BUILD_PARSER_PROMPT, getBuildParserPrompt } from './prompts/build-parser.js';
+import { getDeploymentProfile } from './deployment.js';
 
 // ==================== Tool Registry ====================
 
@@ -215,6 +217,7 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => ({
   resources: [
     SQL_GUIDE_RESOURCE,
     UDM_SCHEMA_RESOURCE,
+    OCSF_SCHEMA_RESOURCE,
     NPL_REFERENCE_RESOURCE,
     VRL_PARSERS_RESOURCE,
     ...getPlaybookResources(),
@@ -233,6 +236,12 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   if (uri === UDM_SCHEMA_URI) {
     return {
       contents: [{ uri, mimeType: 'text/markdown', text: UDM_SCHEMA_CONTENT }],
+    };
+  }
+
+  if (uri === OCSF_SCHEMA_URI) {
+    return {
+      contents: [{ uri, mimeType: 'text/markdown', text: OCSF_SCHEMA_CONTENT }],
     };
   }
 
@@ -282,8 +291,14 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
       return getHuntCampaignPrompt(promptArgs);
     case 'morning_briefing':
       return getMorningBriefingPrompt(promptArgs);
-    case 'build_parser':
-      return getBuildParserPrompt(promptArgs);
+    case 'build_parser': {
+      // The output contract differs by schema, so resolve the deployment before
+      // handing over instructions. Discovery is memoized and never throws; an
+      // unreachable nano yields 'unknown', which produces a prompt that tells
+      // the model to determine the schema itself rather than guessing.
+      const profile = await getDeploymentProfile(getClient());
+      return getBuildParserPrompt(promptArgs, profile.schema);
+    }
     default:
       throw new Error(`Unknown prompt: ${name}`);
   }
@@ -297,7 +312,7 @@ async function main(): Promise<void> {
 
   console.error('nano-investigator MCP server started');
   console.error(`Tools: ${ALL_TOOLS.length}`);
-  console.error(`Resources: ${4 + getPlaybookResources().length}`);
+  console.error(`Resources: ${5 + getPlaybookResources().length}`);
   console.error(`Prompts: ${ALL_PROMPTS.length}`);
   console.error('');
   console.error('Required environment variables:');

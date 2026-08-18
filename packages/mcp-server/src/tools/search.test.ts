@@ -1,10 +1,37 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { NanosiemClient } from '@nano-rs/investigator-core';
 import { handleSearchTool, parseRelativeTime, TOOLS } from './search.js';
+import { resetDeploymentProfile } from '../deployment.js';
 
+const UDM_SCHEMA_FIELDS = [
+  { name: 'src_ip', type: 'ip_address', category: 'Network' },
+  { name: 'dest_ip', type: 'ip_address', category: 'Network' },
+  { name: 'process_name', type: 'string', category: 'Process' },
+  { name: 'user', type: 'string', category: 'Auth' },
+];
+
+/**
+ * Every search tool now resolves the deployment profile before it acts, so the
+ * default mock has to answer discovery. Overrides still win, which is how the
+ * OCSF/lake cases below install a different deployment.
+ */
 function makeMockClient(overrides: Partial<NanosiemClient> = {}): NanosiemClient {
-  return overrides as unknown as NanosiemClient;
+  return {
+    getSchemaFields: vi
+      .fn()
+      .mockResolvedValue({ success: true, data: { schema: 'udm', fields: UDM_SCHEMA_FIELDS } }),
+    getCapabilities: vi
+      .fn()
+      .mockResolvedValue({ success: true, data: { edition: 'open', version: '0.0.0', capabilities: {} } }),
+    ...overrides,
+  } as unknown as NanosiemClient;
 }
+
+// The profile is memoized for the process, so a test that installs a lake or
+// OCSF deployment would otherwise leak into every test after it.
+beforeEach(() => {
+  resetDeploymentProfile();
+});
 
 describe('parseRelativeTime', () => {
   it('parses relative shorthand', () => {
@@ -392,24 +419,27 @@ describe('handleSearchTool: get_field_values coverage', () => {
 });
 
 describe('handleSearchTool: get_schema', () => {
-  const udmFields = [
-    { name: 'src_ip', column_name: 'src_ip', data_type: 'String', category: 'Network', description: 'Source IP' },
-    { name: 'dest_ip', column_name: 'dest_ip', data_type: 'String', category: 'Network', description: 'Dest IP' },
-    { name: 'process_name', column_name: 'process_name', data_type: 'String', category: 'Process', description: 'Process name' },
-    { name: 'user', column_name: 'user', data_type: 'String', category: 'Auth', description: 'User' },
-  ];
+  const schemaFields = UDM_SCHEMA_FIELDS;
 
-  it('returns udm_fields, all_categories, and ext_fields', async () => {
-    const getUdmFields = vi.fn().mockResolvedValue({ success: true, data: { fields: udmFields } });
+  const udmClient = (overrides: Record<string, unknown> = {}) =>
+    makeMockClient({
+      getSchemaFields: vi
+        .fn()
+        .mockResolvedValue({ success: true, data: { schema: 'udm', fields: schemaFields } }),
+      ...overrides,
+    } as Partial<NanosiemClient>);
+
+  it('returns the active profile, its fields, all_categories, and ext_fields', async () => {
     const getExtFields = vi.fn().mockResolvedValue({ success: true, data: ['event_id', 'image_path'] });
-    const client = makeMockClient({ getUdmFields, getExtFields });
+    const client = udmClient({ getExtFields });
 
     const result = await handleSearchTool('get_schema', {}, client);
     expect(result.isError).not.toBe(true);
     const parsed = JSON.parse(result.content[0].text as string);
 
-    expect(parsed.udm_field_count).toBe(4);
-    expect(parsed.udm_fields).toHaveLength(4);
+    expect(parsed.schema).toBe('udm');
+    expect(parsed.field_count).toBe(4);
+    expect(parsed.fields).toHaveLength(4);
     expect(parsed.all_categories).toEqual(
       expect.arrayContaining([
         { name: 'Network', count: 2 },
@@ -421,23 +451,30 @@ describe('handleSearchTool: get_schema', () => {
     expect(parsed.warnings).toBeUndefined();
   });
 
+  it('reads the profile-aware endpoint, never the UDM-only one', async () => {
+    // The whole bug: /api/udm/fields answers with UDM on an OCSF deployment.
+    const getUdmFields = vi.fn();
+    const client = udmClient({ getUdmFields, getExtFields: vi.fn().mockResolvedValue({ success: true, data: [] }) });
+
+    await handleSearchTool('get_schema', {}, client);
+    expect(getUdmFields).not.toHaveBeenCalled();
+  });
+
   it('filters by category (case-insensitive) but keeps all_categories complete', async () => {
-    const getUdmFields = vi.fn().mockResolvedValue({ success: true, data: { fields: udmFields } });
-    const getExtFields = vi.fn().mockResolvedValue({ success: true, data: [] });
-    const client = makeMockClient({ getUdmFields, getExtFields });
+    const client = udmClient({ getExtFields: vi.fn().mockResolvedValue({ success: true, data: [] }) });
 
     const result = await handleSearchTool('get_schema', { category: 'network' }, client);
     const parsed = JSON.parse(result.content[0].text as string);
 
-    expect(parsed.udm_field_count).toBe(2);
-    expect(parsed.udm_fields.every((f: { category: string }) => f.category === 'Network')).toBe(true);
+    expect(parsed.field_count).toBe(2);
+    expect(parsed.total_field_count).toBe(4);
+    expect(parsed.fields.every((f: { category: string }) => f.category === 'Network')).toBe(true);
     expect(parsed.all_categories).toHaveLength(3);
   });
 
   it('skips ext fetch when include_ext is false', async () => {
-    const getUdmFields = vi.fn().mockResolvedValue({ success: true, data: { fields: udmFields } });
     const getExtFields = vi.fn();
-    const client = makeMockClient({ getUdmFields, getExtFields });
+    const client = udmClient({ getExtFields });
 
     const result = await handleSearchTool('get_schema', { include_ext: false }, client);
     const parsed = JSON.parse(result.content[0].text as string);
@@ -447,35 +484,321 @@ describe('handleSearchTool: get_schema', () => {
     expect(parsed.warnings).toBeUndefined();
   });
 
-  it('attaches a warning when ext fetch fails but UDM succeeds', async () => {
-    const getUdmFields = vi.fn().mockResolvedValue({ success: true, data: { fields: udmFields } });
+  it('attaches a warning when ext fetch fails but the schema loads', async () => {
     const getExtFields = vi.fn().mockResolvedValue({
       success: false,
       error: { code: 'HTTP_404', message: 'Not Found' },
     });
-    const client = makeMockClient({ getUdmFields, getExtFields });
+    const client = udmClient({ getExtFields });
 
     const result = await handleSearchTool('get_schema', {}, client);
     expect(result.isError).not.toBe(true);
     const parsed = JSON.parse(result.content[0].text as string);
 
-    expect(parsed.udm_field_count).toBe(4);
+    expect(parsed.field_count).toBe(4);
     expect(parsed.ext_fields).toBeUndefined();
-    expect(parsed.warnings).toBeDefined();
     expect(parsed.warnings[0]).toContain('ext_fields unavailable');
     expect(parsed.warnings[0]).toContain('Not Found');
   });
 
-  it('surfaces an error if the UDM fetch fails', async () => {
-    const getUdmFields = vi.fn().mockResolvedValue({
-      success: false,
-      error: { code: 'HTTP_500', message: 'boom' },
-    });
-    const getExtFields = vi.fn().mockResolvedValue({ success: true, data: [] });
-    const client = makeMockClient({ getUdmFields, getExtFields });
+  it('falls back to /api/udm/fields on a build without the profile endpoint, and says so', async () => {
+    const client = makeMockClient({
+      getSchemaFields: vi.fn().mockResolvedValue({ success: false, error: { code: 'HTTP_404', message: 'Not Found' } }),
+      getUdmFields: vi.fn().mockResolvedValue({
+        success: true,
+        data: {
+          fields: [
+            { name: 'src_ip', column_name: 'src_ip', data_type: 'String', category: 'Network', description: 'Source IP' },
+          ],
+        },
+      }),
+      getExtFields: vi.fn().mockResolvedValue({ success: true, data: [] }),
+    } as Partial<NanosiemClient>);
+
+    const result = await handleSearchTool('get_schema', {}, client);
+    const parsed = JSON.parse(result.content[0].text as string);
+
+    expect(parsed.schema).toBe('udm');
+    expect(parsed.warnings.join(' ')).toContain('/api/schema/fields is unavailable');
+  });
+
+  it('surfaces an error, not a guessable field list, when schema discovery fails entirely', async () => {
+    const client = makeMockClient({
+      getSchemaFields: vi.fn().mockResolvedValue({ success: false, error: { code: 'HTTP_500', message: 'boom' } }),
+      getUdmFields: vi.fn().mockResolvedValue({ success: false, error: { code: 'HTTP_500', message: 'boom' } }),
+    } as Partial<NanosiemClient>);
 
     const result = await handleSearchTool('get_schema', {}, client);
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('boom');
+  });
+
+  describe('OCSF deployment', () => {
+    const ocsfClient = () =>
+      makeMockClient({
+        getSchemaFields: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            schema: 'ocsf',
+            fields: [
+              { name: 'actor.user.name', type: 'string', category: 'Identity' },
+              { name: 'src_endpoint.ip', type: 'ip_address', category: 'Network' },
+            ],
+          },
+        }),
+        getExtFields: vi.fn(),
+      } as Partial<NanosiemClient>);
+
+    it('reports the OCSF profile and its dotted field names', async () => {
+      const result = await handleSearchTool('get_schema', {}, ocsfClient());
+      const parsed = JSON.parse(result.content[0].text as string);
+
+      expect(parsed.schema).toBe('ocsf');
+      expect(parsed.fields.map((f: { name: string }) => f.name)).toContain('actor.user.name');
+    });
+
+    it('distinguishes the flat search projection from the nested full event', async () => {
+      const result = await handleSearchTool('get_schema', {}, ocsfClient());
+      const parsed = JSON.parse(result.content[0].text as string);
+
+      // Both shapes are real and they are not interchangeable: `search` sends
+      // table_view, so its rows are flat dotted keys; `get_event` returns the
+      // stored event, which is nested.
+      expect(parsed.guidance).toContain('row["actor.user.name"]');
+      expect(parsed.guidance).toContain('event.actor.user.name');
+    });
+
+    it('warns that a search row is a pruned projection, not the whole event', async () => {
+      const result = await handleSearchTool('get_schema', {}, ocsfClient());
+      const parsed = JSON.parse(result.content[0].text as string);
+
+      expect(parsed.guidance).toContain('PRUNED projection');
+      expect(parsed.guidance).toContain('get_event');
+    });
+
+    it('does not offer ext_fields — OCSF overflow is unmapped.*, not ext', async () => {
+      const client = ocsfClient();
+      const result = await handleSearchTool('get_schema', {}, client);
+      const parsed = JSON.parse(result.content[0].text as string);
+
+      expect(client.getExtFields).not.toHaveBeenCalled();
+      expect(parsed.ext_fields).toBeUndefined();
+      expect(parsed.ext_fields_note).toContain('unmapped.*');
+    });
+  });
+});
+
+describe('handleSearchTool: lake deployments', () => {
+  const lakeClient = (overrides: Record<string, unknown> = {}) =>
+    makeMockClient({
+      getSchemaFields: vi.fn().mockResolvedValue({
+        success: true,
+        data: { schema: 'ocsf', fields: [{ name: 'src_endpoint.ip', type: 'ip_address', category: 'Network' }] },
+      }),
+      getCapabilities: vi.fn().mockResolvedValue({
+        success: true,
+        data: { edition: 'open', version: '0.0.0', capabilities: {}, logQueryBackend: 'lake' },
+      }),
+      ...overrides,
+    } as Partial<NanosiemClient>);
+
+  it('refuses search_sql without a round trip, and names nPL as the way forward', async () => {
+    const searchSql = vi.fn();
+    const client = lakeClient({ searchSql });
+
+    const result = await handleSearchTool('search_sql', { sql: 'SELECT 1' }, client);
+
+    expect(result.isError).toBe(true);
+    expect(searchSql).not.toHaveBeenCalled();
+    expect(result.content[0].text).toContain('Raw SQL is not available');
+    expect(result.content[0].text).toContain('stats count by');
+  });
+
+  it('learns the backend from a refusal on a build that does not publish it', async () => {
+    const searchSql = vi.fn().mockResolvedValue({
+      success: false,
+      error: {
+        code: 'QUERY_ERROR',
+        message: 'Query error: raw SQL is not supported by the lake MVP; use nPL so Nano can enforce tenant and byte-scan policy',
+      },
+    });
+    // No logQueryBackend published, so the first call has to go out to learn.
+    const client = makeMockClient({
+      getSchemaFields: vi.fn().mockResolvedValue({ success: true, data: { schema: 'ocsf', fields: UDM_SCHEMA_FIELDS } }),
+      searchSql,
+    } as Partial<NanosiemClient>);
+
+    const first = await handleSearchTool('search_sql', { sql: 'SELECT 1' }, client);
+    expect(first.isError).toBe(true);
+    expect(first.content[0].text).toContain('Raw SQL is not available');
+    expect(searchSql).toHaveBeenCalledOnce();
+
+    // Second call is answered from the learned profile — no further round trip.
+    const second = await handleSearchTool('search_sql', { sql: 'SELECT 2' }, client);
+    expect(second.isError).toBe(true);
+    expect(searchSql).toHaveBeenCalledOnce();
+  });
+
+  it('resolves an escalated durable job to its rows instead of reporting nothing', async () => {
+    const search = vi.fn().mockResolvedValue({ success: true, data: { job_id: 'job-1', status: 'queued' } });
+    const getSearchJob = vi
+      .fn()
+      .mockResolvedValueOnce({ success: true, data: { job_id: 'job-1', status: 'running' } })
+      .mockResolvedValue({
+        success: true,
+        data: {
+          job_id: 'job-1',
+          status: 'completed',
+          durable_result: { rows: 2, pages: 1, page_rows: 2 },
+        },
+      });
+    const getSearchJobResultPage = vi.fn().mockResolvedValue({
+      success: true,
+      data: { page: 0, pages: 1, total_rows: 2, row_offset: 0, rows: [{ a: 1 }, { a: 2 }] },
+    });
+    const client = lakeClient({ search, getSearchJob, getSearchJobResultPage });
+
+    const result = await handleSearchTool(
+      'search',
+      { query: '* | head 2', start_time: '-1h' },
+      client,
+    );
+
+    expect(result.isError).not.toBe(true);
+    const parsed = JSON.parse(result.content[0].text as string);
+    expect(parsed.results).toHaveLength(2);
+    expect(parsed.total_count).toBe(2);
+    expect(parsed.escalation_note).toContain('durable job job-1');
+  });
+
+  it('returns an inline job result when the job carries one', async () => {
+    const search = vi.fn().mockResolvedValue({ success: true, data: { job_id: 'job-2', status: 'queued' } });
+    const getSearchJob = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        job_id: 'job-2',
+        status: 'completed',
+        result: { results: [{ b: 1 }], total_count: 1, execution_time_ms: 5, fields: [] },
+      },
+    });
+    const client = lakeClient({ search, getSearchJob });
+
+    const result = await handleSearchTool('search', { query: '*', start_time: '-1h' }, client);
+    const parsed = JSON.parse(result.content[0].text as string);
+
+    expect(parsed.results).toEqual([{ b: 1 }]);
+    expect(parsed.escalation_note).toContain('durable job job-2');
+  });
+
+  it('never reports a failed escalation as a zero-match result', async () => {
+    const search = vi.fn().mockResolvedValue({ success: true, data: { job_id: 'job-3', status: 'queued' } });
+    const getSearchJob = vi.fn().mockResolvedValue({
+      success: true,
+      data: { job_id: 'job-3', status: 'failed', error: 'scan budget exceeded' },
+    });
+    const client = lakeClient({ search, getSearchJob });
+
+    const result = await handleSearchTool('search', { query: '*', start_time: '-1h' }, client);
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('scan budget exceeded');
+    expect(result.content[0].text).toContain('not a zero-match result');
+  });
+});
+
+describe('handleSearchTool: get_event', () => {
+  it('returns the complete event and flags that it is nested', async () => {
+    const fetchLog = vi.fn().mockResolvedValue({
+      success: true,
+      data: { event: { actor: { user: { name: 'mharris' } }, metadata: { uid: 'evt-1' } } },
+    });
+    const client = makeMockClient({ fetchLog } as Partial<NanosiemClient>);
+
+    const result = await handleSearchTool('get_event', { id: 'evt-1' }, client);
+    expect(result.isError).not.toBe(true);
+    const parsed = JSON.parse(result.content[0].text as string);
+
+    expect(parsed.event.actor.user.name).toBe('mharris');
+    expect(parsed.note).toContain('NESTED');
+  });
+
+  it('passes the pruning hints through when given', async () => {
+    const fetchLog = vi.fn().mockResolvedValue({ success: true, data: { event: {} } });
+    const client = makeMockClient({ fetchLog } as Partial<NanosiemClient>);
+
+    await handleSearchTool(
+      'get_event',
+      {
+        id: 'evt-1',
+        start_time: '2026-08-18T20:00:00Z',
+        end_time: '2026-08-18T20:05:00Z',
+        source_type: 'windows_event',
+      },
+      client,
+    );
+
+    expect(fetchLog).toHaveBeenCalledWith({
+      id: 'evt-1',
+      time_range: { start: '2026-08-18T20:00:00Z', end: '2026-08-18T20:05:00Z' },
+      source_type: 'windows_event',
+    });
+  });
+
+  it('omits the time range entirely when no start_time is given', async () => {
+    const fetchLog = vi.fn().mockResolvedValue({ success: true, data: { event: {} } });
+    const client = makeMockClient({ fetchLog } as Partial<NanosiemClient>);
+
+    await handleSearchTool('get_event', { id: 'evt-1' }, client);
+
+    expect(fetchLog.mock.calls[0][0].time_range).toBeUndefined();
+  });
+
+  it('explains what a null event means instead of returning an empty object', async () => {
+    const fetchLog = vi.fn().mockResolvedValue({ success: true, data: { event: null } });
+    const client = makeMockClient({ fetchLog } as Partial<NanosiemClient>);
+
+    const result = await handleSearchTool('get_event', { id: 'result-0' }, client);
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('metadata.uid');
+    expect(result.content[0].text).toContain('not a positional index');
+  });
+});
+
+describe('deployment discovery caching', () => {
+  it('retries after a failed discovery instead of poisoning the session', async () => {
+    // A transient outage at session start must not permanently convince the
+    // server it has no schema.
+    const getSchemaFields = vi
+      .fn()
+      .mockResolvedValueOnce({ success: false, error: { code: 'HTTP_503', message: 'unavailable' } })
+      .mockResolvedValue({ success: true, data: { schema: 'ocsf', fields: UDM_SCHEMA_FIELDS } });
+    const client = makeMockClient({
+      getSchemaFields,
+      getUdmFields: vi.fn().mockResolvedValue({ success: false, error: { code: 'HTTP_503', message: 'unavailable' } }),
+      getExtFields: vi.fn(),
+    } as Partial<NanosiemClient>);
+
+    const first = await handleSearchTool('get_schema', {}, client);
+    expect(first.isError).toBe(true);
+
+    const second = await handleSearchTool('get_schema', {}, client);
+    expect(second.isError).not.toBe(true);
+    expect(JSON.parse(second.content[0].text as string).schema).toBe('ocsf');
+  });
+
+  it('memoizes a successful discovery rather than re-fetching per tool call', async () => {
+    const getSchemaFields = vi
+      .fn()
+      .mockResolvedValue({ success: true, data: { schema: 'udm', fields: UDM_SCHEMA_FIELDS } });
+    const client = makeMockClient({
+      getSchemaFields,
+      getExtFields: vi.fn().mockResolvedValue({ success: true, data: [] }),
+    } as Partial<NanosiemClient>);
+
+    await handleSearchTool('get_schema', {}, client);
+    await handleSearchTool('get_schema', {}, client);
+
+    expect(getSchemaFields).toHaveBeenCalledOnce();
   });
 });

@@ -14,6 +14,11 @@ import type {
   FieldValuesRequest,
   FieldValuesResponse,
   UdmFieldsResponse,
+  SchemaFieldsResponse,
+  SearchOrJobResponse,
+  SearchJobStatusResponse,
+  SearchJobResultPage,
+  CapabilitiesResponse,
   SavedSearch,
   CreateSavedSearchRequest,
   CreateSharedSearchRequest,
@@ -264,8 +269,17 @@ export class NanosiemClient {
 
   // ==================== Search (→ search service) ====================
 
-  async search(req: SearchRequest): Promise<ApiResponse<SearchResponse>> {
-    return this.request<SearchResponse>('POST', '/api/search', {
+  /**
+   * Execute an nPL search.
+   *
+   * The response is EITHER a synchronous `SearchResponse` or an
+   * `AsyncSearchAck`. A lake deployment escalates a query that exceeds its
+   * scan budget to a durable job and answers 200 with `{job_id, status}` —
+   * discriminate with `isAsyncSearchAck` before reading `results`, or an
+   * escalated query reads as zero matches.
+   */
+  async search(req: SearchRequest): Promise<ApiResponse<SearchOrJobResponse>> {
+    return this.request<SearchOrJobResponse>('POST', '/api/search', {
       ...req,
       table_view: req.table_view ?? true,
       skip_field_stats: req.skip_field_stats ?? true,
@@ -275,6 +289,53 @@ export class NanosiemClient {
 
   async searchSql(req: RawSqlRequest): Promise<ApiResponse<SearchResponse>> {
     return this.request<SearchResponse>('POST', '/api/search/sql', req, { useSearchUrl: true });
+  }
+
+  /** Poll a durable/async search job. */
+  async getSearchJob(jobId: string): Promise<ApiResponse<SearchJobStatusResponse>> {
+    return this.request<SearchJobStatusResponse>(
+      'GET',
+      `/api/search/jobs/${this.encodeId(jobId)}`,
+      undefined,
+      { useSearchUrl: true },
+    );
+  }
+
+  /** Fetch one page of a completed durable job's frozen result. */
+  async getSearchJobResultPage(
+    jobId: string,
+    page: number,
+  ): Promise<ApiResponse<SearchJobResultPage>> {
+    return this.request<SearchJobResultPage>(
+      'GET',
+      `/api/search/jobs/${this.encodeId(jobId)}/results/${Math.trunc(page)}`,
+      undefined,
+      { useSearchUrl: true },
+    );
+  }
+
+  /**
+   * Fetch one complete event by ID (the "expand this row" path).
+   *
+   * `search` returns a pruned `table_view` projection — on OCSF that is roughly
+   * 25 columns out of 278 — so this is the only way to see everything an event
+   * actually carries. The event comes back in its stored shape, which is NESTED
+   * (`event.actor.user.name`), not the flat dotted shape `search` returns.
+   *
+   * `time_range` and `source_type` are optional pruning hints; supplying them
+   * turns a wide scan into a tight indexed read.
+   */
+  async fetchLog(req: {
+    id: string;
+    time_range?: { start: string; end: string };
+    source_type?: string;
+  }): Promise<ApiResponse<{ event: Record<string, unknown> | null }>> {
+    return this.request<{ event: Record<string, unknown> | null }>(
+      'POST',
+      '/api/search/log',
+      req,
+      { useSearchUrl: true },
+    );
   }
 
   async explainQuery(query: string, timeRange: { start: string; end: string }): Promise<ApiResponse<{ sql: string; explanation?: string }>> {
@@ -599,6 +660,23 @@ export class NanosiemClient {
 
   async getUdmFields(): Promise<ApiResponse<UdmFieldsResponse>> {
     return this.request<UdmFieldsResponse>('GET', '/api/udm/fields');
+  }
+
+  /**
+   * Field universe of the deployment's ACTIVE schema profile, with the
+   * `schema` discriminator naming it (NAN-1241).
+   *
+   * Prefer this over {@link getUdmFields}, which always answers with the UDM
+   * universe no matter what the deployment booted with. Absent on nano builds
+   * older than the profile-aware endpoint — callers fall back to `/api/udm/fields`.
+   */
+  async getSchemaFields(): Promise<ApiResponse<SchemaFieldsResponse>> {
+    return this.request<SchemaFieldsResponse>('GET', '/api/schema/fields');
+  }
+
+  /** Build edition, version, and capability flags. Unauthenticated. */
+  async getCapabilities(): Promise<ApiResponse<CapabilitiesResponse>> {
+    return this.request<CapabilitiesResponse>('GET', '/api/capabilities');
   }
 
   async getExtFields(): Promise<ApiResponse<string[]>> {

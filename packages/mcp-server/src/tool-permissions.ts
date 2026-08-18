@@ -72,12 +72,17 @@ export const TOOL_PERMISSION_REQUIREMENTS: Record<
   search: allOf('search:execute'),
   search_sql: allOf('search:sql'),
   get_schema: alternatives(
-    { allOf: ['search:view'], when: 'include_ext is false' },
+    {
+      allOf: ['search:view'],
+      when: 'include_ext is false, or the deployment is OCSF (which has no ext column to sample)',
+    },
     {
       allOf: ['search:view', 'search:execute'],
-      when: 'include_ext is true or omitted (the default)',
+      when: 'the deployment is UDM and include_ext is true or omitted (the default)',
     },
   ),
+  // /api/search/log — the single-event drill-down; gated exactly like a search.
+  get_event: allOf('search:execute'),
   explain_query: allOf('search:execute'),
   get_field_values: allOf('search:execute'),
   list_saved_searches: allOf('search:view'),

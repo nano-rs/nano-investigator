@@ -10,7 +10,7 @@ export const SQL_GUIDE_RESOURCE = {
   uri: SQL_GUIDE_URI,
   name: 'nano SQL Guide',
   description:
-    'ClickHouse SQL patterns for the nano SIEM — performance rules, canonical query recipes (prevalence, top-N, time bucketing, identity ASOF joins, free-text hunt), and anti-patterns to avoid.',
+    'ClickHouse SQL patterns for the nano SIEM — performance rules, canonical query recipes (prevalence, top-N, time bucketing, identity ASOF joins, free-text hunt), and anti-patterns to avoid. Assumes a ClickHouse-backed UDM deployment; check `get_schema` first, since lake-backed deployments refuse raw SQL and OCSF deployments use different column names.',
   mimeType: 'text/markdown',
 };
 
@@ -18,7 +18,15 @@ export const SQL_GUIDE_CONTENT = `# nano SQL Guide
 
 ClickHouse SQL patterns for hunting through the nano SIEM log store. Examples are lifted from production code in nanosiem-core.
 
-> Pair this with \`get_schema\` (UDM column inventory) and the \`search_sql\` tool.
+> **Applies to ClickHouse-backed, UDM-schema deployments only.** Call \`get_schema\` first.
+> - If \`query_backend\` is \`lake\`, none of this applies: raw SQL is refused, there is no \`logs\`
+>   table, and nPL via the \`search\` tool is the only query language.
+> - If \`schema\` is \`ocsf\`, the column names below do not exist — events are stored under dotted
+>   OCSF paths (\`src_endpoint.ip\`, \`actor.process.name\`) in \`ocsf_logs\`, not \`logs\`. The
+>   performance rules (single WHERE, no explicit PREWHERE, \`lower()\` consistency, always filter on
+>   time) still hold; the field names and table do not.
+>
+> Pair this with \`get_schema\` (the deployment's real column inventory) and the \`search_sql\` tool.
 
 ---
 

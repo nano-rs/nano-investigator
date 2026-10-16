@@ -122,6 +122,8 @@ export interface NanosiemClientConfig {
   searchUrl?: string;
   apiKey: string;
   timeout?: number;
+  /** Open core omits enterprise cases and notebooks. */
+  deployment?: 'hosted' | 'open-core';
 }
 
 export interface ApiResponse<T> {
@@ -139,12 +141,20 @@ export class NanosiemClient {
   private searchUrl: string;
   private apiKey: string;
   private timeout: number;
+  private deployment?: 'hosted' | 'open-core';
 
   constructor(config: NanosiemClientConfig) {
     this.apiUrl = config.apiUrl.replace(/\/$/, '');
     this.searchUrl = config.searchUrl?.replace(/\/$/, '') || this.apiUrl;
+    for (const base of [this.apiUrl, this.searchUrl]) {
+      const url = new URL(base);
+      if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+        throw new Error('API URLs must be HTTP(S) base URLs without credentials, query or fragment.');
+      }
+    }
     this.apiKey = config.apiKey;
     this.timeout = config.timeout ?? 60000;
+    this.deployment = config.deployment ?? (new URL(this.apiUrl).hostname === 'us.nano.rs' ? 'hosted' : undefined);
   }
 
   /** Encode a path segment to prevent path traversal */
@@ -167,6 +177,24 @@ export class NanosiemClient {
       timeoutMs?: number;
     }
   ): Promise<ApiResponse<T>> {
+    if (this.deployment === 'open-core' && /^\/api\/(cases|notebooks|risk|entities|threat-intel)(?:\/|$)/.test(path)) {
+      return { success: false, error: { code: 'NOT_AVAILABLE', message: 'This feature is not available in open core (cases, notebooks, risk, entity context and tenant threat intelligence require hosted enterprise). Use alerts, search and prevalence for investigation.' } };
+    }
+    if (this.deployment === 'hosted' && path === '/api/search/sql') {
+      return { success: false, error: { code: 'NOT_AVAILABLE', message: 'Raw SQL is not available for hosted tenants. Use search with nPL and canonical OCSF fields.' } };
+    }
+    if (this.deployment === 'hosted' && method !== 'GET' && (
+      path === '/api/cases' || path === '/api/notebooks'
+      || /^\/api\/cases\/[^/]+(?:\/(?:status|assign|wall|notebook))?$/.test(path)
+      || /^\/api\/notebooks\/[^/]+$/.test(path))) {
+      return { success: false, error: { code: 'NOT_AVAILABLE', message: 'This hosted operation requires an interactive tenant session. API keys cannot perform it; use the nano UI.' } };
+    }
+    if (this.deployment === 'hosted' && path.startsWith('/api/source-configurations') && method !== 'GET') {
+      return { success: false, error: { code: 'NOT_AVAILABLE', message: 'Source transports and routing rules are managed by the platform for hosted tenants. Use hosted source onboarding in nano.' } };
+    }
+    if (this.deployment === 'hosted' && path === '/api/settings/organizational-context') {
+      return { success: false, error: { code: 'NOT_AVAILABLE', message: 'Organizational context is not available through this hosted API. Supply investigation context explicitly.' } };
+    }
     const controller = new AbortController();
     const timeout = opts?.timeoutMs ?? this.timeout;
     const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -191,12 +219,12 @@ export class NanosiemClient {
         headers: {
           'Content-Type': 'application/json',
           'X-API-Key': this.apiKey,
+          'User-Agent': 'curl/8.0.0 nano-investigator',
         },
         body: body ? JSON.stringify(body) : undefined,
+        redirect: 'error',
         signal: controller.signal,
       });
-
-      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const parsedErrorBody: unknown = await response.json().catch(() => ({}));
@@ -213,14 +241,15 @@ export class NanosiemClient {
           requestId ? `request_id=${requestId}` : undefined,
           cloudflareRay ? `cf_ray=${cloudflareRay}` : undefined,
         ].filter((value): value is string => value !== undefined);
-        const serverMessage =
+        const unavailable = errorBody.error === 'route_not_available';
+        const serverMessage = unavailable ? 'This endpoint is not available for hosted tenants' :
           (errorBody as { error?: { message?: string } }).error?.message ||
           (errorBody as { message?: string }).message ||
           response.statusText;
         return {
           success: false,
           error: {
-            code: `HTTP_${response.status}`,
+            code: unavailable ? 'NOT_AVAILABLE' : `HTTP_${response.status}`,
             message: `${serverMessage} (${diagnostics.join('; ')})`,
             details: {
               ...errorBody,
@@ -259,22 +288,96 @@ export class NanosiemClient {
           message: error instanceof Error ? error.message : 'Unknown error',
         },
       };
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
   // ==================== Search (→ search service) ====================
 
+  private checkedSearchResult(data: SearchResponse, limit: number): ApiResponse<SearchResponse> {
+    if (!data || !Array.isArray(data.results)) {
+      return { success: false, error: { code: 'INVALID_RESPONSE', message: 'Search returned neither result rows nor a valid job envelope.' } };
+    }
+    let metadataSeen = false;
+    const count = data.results.reduce((count, row) => {
+      if (!metadataSeen && row && Object.prototype.hasOwnProperty.call(row, '_display_type')) {
+        metadataSeen = true;
+        return count;
+      }
+      return count + 1;
+    }, 0);
+    if (count > limit) return { success: false, error: { code: 'RESULT_LIMIT', message: `Search result withheld: returned ${count} rows above the requested ${limit}. Narrow the query and sort before head ${limit}; no partial results returned.` } };
+    return { success: true, data };
+  }
+
+  /** Resolve inline or durable results without ever exporting an unbounded result. */
+  private async executeSearch(path: string, req: SearchRequest | RawSqlRequest): Promise<ApiResponse<SearchResponse>> {
+    const limit = req.limit ?? 100;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
+      return { success: false, error: { code: 'RESULT_LIMIT', message: 'Search limit must be an integer from 1 to 1000.' } };
+    }
+    const started = Date.now();
+    const submitted = await this.request<SearchResponse | { job_id: string; status: string }>(
+      'POST', path, { ...req, limit, ...(path === '/api/search' ? { async_mode: true } : {}) }, { useSearchUrl: true });
+    if (!submitted.success) return { success: false, error: submitted.error };
+    if (!submitted.data) return { success: false, error: { code: 'INVALID_RESPONSE', message: 'Search returned no result or job envelope.' } };
+    if (!('job_id' in submitted.data) || typeof submitted.data.job_id !== 'string') return this.checkedSearchResult(submitted.data as SearchResponse, limit);
+    const jobId = submitted.data.job_id;
+    while (Date.now() - started < this.timeout) {
+      const polled = await this.request<{
+        status: string; result?: SearchResponse; error?: string;
+        durable_result?: { rows: number; pages: number; has_more: boolean };
+      }>('GET', `/api/search/jobs/${this.encodeId(jobId)}`, undefined, {
+        useSearchUrl: true, timeoutMs: Math.max(1, this.timeout - (Date.now() - started)),
+      });
+      if (!polled.success) return { success: false, error: polled.error };
+      const job = polled.data;
+      if (!job) break;
+      if (['failed', 'cancelled'].includes(job.status)) {
+        return { success: false, error: { code: 'SEARCH_JOB_FAILED', message: `Search job ${jobId} ${job.status}: ${job.error ?? 'no results available'}` } };
+      }
+      if (job.status === 'completed') {
+        if (job.result) return this.checkedSearchResult(job.result, limit);
+        const summary = job.durable_result;
+        if (!summary || !Number.isSafeInteger(summary.rows) || !Number.isSafeInteger(summary.pages)
+          || summary.rows < 0 || summary.pages < 0 || summary.rows > limit || summary.pages > limit) {
+          return { success: false, error: { code: 'RESULT_LIMIT', message: `Search job ${jobId} result withheld: invalid or oversized result manifest. Narrow the query and sort before head ${limit}.` } };
+        }
+        const rows: Record<string, unknown>[] = [];
+        for (let page = 0; page < summary.pages; page++) {
+          const remaining = this.timeout - (Date.now() - started);
+          if (remaining <= 0) break;
+          const response = await this.request<{ page: number; pages: number; total_rows: number; row_offset: number; rows: Record<string, unknown>[] }>(
+            'GET', `/api/search/jobs/${this.encodeId(jobId)}/results/${page}`, undefined,
+            { useSearchUrl: true, timeoutMs: remaining });
+          if (!response.success) return { success: false, error: response.error };
+          const part = response.data;
+          if (!part || part.page !== page || part.pages !== summary.pages || part.total_rows !== summary.rows
+            || part.row_offset !== rows.length || !Array.isArray(part.rows) || rows.length + part.rows.length > limit) {
+            return { success: false, error: { code: 'RESULT_LIMIT', message: 'Search result withheld: inconsistent or oversized durable page. Narrow the query; no partial rows returned.' } };
+          }
+          rows.push(...part.rows);
+        }
+        if (rows.length !== summary.rows) break;
+        return { success: true, data: { results: rows, total_count: summary.rows, execution_time_ms: Date.now() - started,
+          fields: [], job_id: jobId, has_more: summary.has_more } };
+      }
+      await new Promise((resolve) => setTimeout(resolve, Math.min(250, Math.max(0, this.timeout - (Date.now() - started)))));
+    }
+    return { success: false, error: { code: 'TIMEOUT', message: `Search job ${jobId} did not finish within ${this.timeout}ms. No partial results returned. Narrow the query or inspect the job in nano.` } };
+  }
+
   async search(req: SearchRequest): Promise<ApiResponse<SearchResponse>> {
-    return this.request<SearchResponse>('POST', '/api/search', {
-      ...req,
-      table_view: req.table_view ?? true,
-      skip_field_stats: req.skip_field_stats ?? true,
-      skip_histogram: req.skip_histogram ?? true,
-    }, { useSearchUrl: true });
+    if (req.source_type !== undefined) {
+      return { success: false, error: { code: 'INVALID_ARGUMENT', message: 'The lake search API does not accept source_type. Put a metadata.log_source filter in the query before aggregation.' } };
+    }
+    return this.executeSearch('/api/search', { ...req, table_view: req.table_view ?? true,
+      skip_field_stats: req.skip_field_stats ?? true, skip_histogram: req.skip_histogram ?? true });
   }
 
   async searchSql(req: RawSqlRequest): Promise<ApiResponse<SearchResponse>> {
-    return this.request<SearchResponse>('POST', '/api/search/sql', req, { useSearchUrl: true });
+    return this.executeSearch('/api/search/sql', req);
   }
 
   async explainQuery(query: string, timeRange: { start: string; end: string }): Promise<ApiResponse<{ sql: string; explanation?: string }>> {
@@ -503,8 +606,8 @@ export class NanosiemClient {
 
   // ==================== Detections (→ api, routes use /api/rules) ====================
 
-  async listDetections(): Promise<ApiResponse<DetectionRule[]>> {
-    return this.request<DetectionRule[]>('GET', '/api/rules');
+  async listDetections(params?: { limit?: number; offset?: number }): Promise<ApiResponse<DetectionRule[]>> {
+    return this.request<DetectionRule[]>('GET', '/api/rules', undefined, { query: { limit: params?.limit ?? 100, offset: params?.offset ?? 0 } });
   }
 
   async getDetection(id: string): Promise<ApiResponse<DetectionRule>> {
@@ -553,10 +656,9 @@ export class NanosiemClient {
     return this.request<RiskOverviewResponse>('GET', '/api/risk/overview');
   }
 
-  async getEntityRiskTimeline(entity: string, entityType?: string): Promise<ApiResponse<RiskEntitiesResponse>> {
-    return this.request<RiskEntitiesResponse>('GET', '/api/risk/time-windowed', undefined, {
-      query: { entity, entity_type: entityType },
-    });
+  async getEntityRiskTimeline(entity: string, entityType?: string): Promise<ApiResponse<unknown>> {
+    if (!entityType) return { success: false, error: { code: 'INVALID_ARGUMENT', message: 'entity_type is required for an entity risk timeline.' } };
+    return this.request('GET', `/api/entities/${this.encodeId(entityType)}/${this.encodeId(entity)}/risk-timeline`);
   }
 
   /** Daily finding counts per entity — the risk "heatmap". */
@@ -572,6 +674,14 @@ export class NanosiemClient {
   /** Reset one entity's risk to baseline. DESTRUCTIVE — requires `risk:clear`. */
   async clearEntityRisk(req: ClearEntityRiskRequest): Promise<ApiResponse<ClearRiskResponse>> {
     return this.request<ClearRiskResponse>('POST', '/api/risk/clear', req);
+  }
+
+  async getEntityContext(entityType: string, value: string): Promise<ApiResponse<unknown>> {
+    return this.request('GET', `/api/entities/${this.encodeId(entityType)}/${this.encodeId(value)}/context`);
+  }
+
+  async lookupIoc(artifact: string, artifactType?: string): Promise<ApiResponse<unknown>> {
+    return this.request('POST', '/api/threat-intel/lookup', { artifact, artifact_type: artifactType });
   }
 
   // ==================== Enrichment (→ api) ====================
@@ -593,12 +703,12 @@ export class NanosiemClient {
 
   // ==================== System (→ api) ====================
 
-  async getSourceTypes(): Promise<ApiResponse<string[]>> {
-    return this.request<string[]>('GET', '/api/source-types');
+  async getSourceTypes(): Promise<ApiResponse<[string, number][]>> {
+    return this.request<[string, number][]>('GET', '/api/source-types');
   }
 
   async getUdmFields(): Promise<ApiResponse<UdmFieldsResponse>> {
-    return this.request<UdmFieldsResponse>('GET', '/api/udm/fields');
+    return this.request<UdmFieldsResponse>('GET', '/api/schema/fields');
   }
 
   async getExtFields(): Promise<ApiResponse<string[]>> {

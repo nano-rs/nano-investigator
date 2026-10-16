@@ -55,7 +55,7 @@ clients should use the tool metadata as the authoritative contract.
 
 | Permission | What it enables |
 |------------|-----------------|
-| `search:view` | Read saved searches and the base UDM schema |
+| `search:view` | Read saved searches and the active OCSF schema |
 | `search:execute` | Execute and explain nPL, field stats, extended-schema discovery |
 | `log_sources:view` | Inspect log sources and use the parser validation tools |
 | `lookup:view` | Execute nPL searches that use the `lookup` command |
@@ -239,7 +239,7 @@ The full tool catalog, grouped by category:
 The server also exposes **MCP resources** (context that gets loaded into the conversation) and **prompts** (structured investigation workflows):
 
 **Resources:**
-- `nanosiem://schema/udm` — UDM field catalog organized by investigation scenario
+- `nanosiem://schema/udm` — OCSF 1.9 field catalog (legacy URI retained) organized by investigation scenario
 - `nanosiem://reference/npl` — nPL query language reference
 - `nanosiem://reference/playbooks/{type}` — Investigation playbooks (brute_force, lateral_movement, data_exfil, malware, phishing, insider_threat, generic)
 

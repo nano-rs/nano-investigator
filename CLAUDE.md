@@ -16,31 +16,16 @@
 - **Discover source types first** — Call `get_source_types` before writing queries that filter on source_type. Never guess or hardcode source type names (e.g. `dns`, `proxy`). The available source types vary per deployment.
 - **Use source_type when known** — Optimizes queries through partition and index pruning.
   ```
-  source_type=windows_security | where event_id=4625   ← fast
-  event_id=4625                                         ← slow (scans all source types)
+  metadata.log_source=windows_security | where metadata.event_code=4625   ← fast
+  metadata.event_code=4625                                         ← slow (scans all source types)
   ```
-- **Only use real UDM field names** — Never guess or invent field names. All source types share the same UDM schema. If you're unsure whether a field exists, run `source_type=<type> | head 1` to see the actual fields. Common mistakes to avoid:
-  - `process_command_line` → wrong. The real field is `process`
-  - `parent_process_command_line` → wrong. The real field is `parent_process`
-  - `file_hash_sha256` → wrong. The real field is `file_hash`
-  - `status_code` → wrong for proxy. The real field is `http_status_code`
-  - `parent_user` is a real field (not `parent_process_user`)
-
-  **Key UDM fields for investigations:**
-  - **Network**: src_ip, dest_ip, src_port, dest_port, src_host, dest_host, src_mac, dest_mac, protocol, bytes_in, bytes_out, packets, url, url_domain, uri_path
-  - **Endpoint/Process**: process_name, process, process_path, process_id, parent_process_name, parent_process, parent_process_path, parent_process_id, file_hash, file_name, file_path, file_size, file_action
-  - **Auth**: user, user_domain, user_id, src_user, dest_user, auth_type, auth_result, session_id, mfa_used
-  - **Web/Proxy**: http_method, http_status_code, http_user_agent, http_referrer, http_content_type, uri_path, url, url_domain, duration
-  - **DNS**: answer, answer_count, query_type, record_type, reply_code, transaction_id, ttl
-  - **Identity**: user, src_host, src_ip, src_mac, dest_host, dest_ip
-  - **Alert/Detection**: severity, signature, signature_id, rule_id, rule_name, mitre_technique_id
-  - **Meta**: timestamp, source_type, message, action, category, vendor_product, metadata, ext
-  - **Enrichment** (auto-added): enriched_src_country, enriched_dest_country, enriched_src_asn, enriched_dest_asn, ioc_matched, ioc_confidence, prevalence_min, prevalence_dest_domain, prevalence_dest_ip, prevalence_file_hash, prevalence_process_hash
+- **Use canonical OCSF 1.9 field paths** — call `get_schema` before constructing queries. Common fields: `actor.user.name`, `src_endpoint.ip`, `dst_endpoint.ip`, `device.hostname`, `metadata.log_source`, `process.file.path`, `process.cmd_line`, `time`, `class_uid`, `activity_id`. Use `get_field_values` to confirm observed values. Do not invent fields or assume every source populates them.
+- **Deployment capabilities** — hosted raw SQL is unavailable; use nPL. Open core has alerts, search and prevalence; cases, notebooks, risk and entity-context endpoints require enterprise. Report unavailable capabilities clearly.
 
 - **Free text search** — Just search the term: `connection refused`, `svchost.exe`
-- **Field searches** — `src_ip="10.0.0.1"`, `user=admin`, `status=500`
-- **Stats for aggregation** — `| stats count by src_ip`, `| stats sum(bytes_out) by dest_ip`
-- **Chain commands** — `source_type=auth | where action="failed" | stats count by src_ip | where count > 10`
+- **Field searches** — `src_endpoint.ip="10.0.0.1"`, `actor.user.name=admin`, `status=500`
+- **Stats for aggregation** — `| stats count by src_endpoint.ip`, `| stats sum(traffic.bytes_out) by dst_endpoint.ip`
+- **Chain commands** — `metadata.log_source=auth | where action="failed" | stats count by src_endpoint.ip | where count > 10`
 
 ## Investigation Methodology
 
@@ -81,50 +66,7 @@ This is different from starting a fresh investigation from an alert — `review_
 
 ## Identity Resolution (Host ↔ IP ↔ User)
 
-nano maintains an `identity_observations` table that automatically maps IPs to hostnames, users, and MACs from any log source that has both `src_ip` and `src_host`. This is critical for cross-source correlation — different source types use different identifiers (e.g., EDR logs use hostname, proxy logs use IP).
-
-### `resolve_identity` command
-
-Enriches search results with identity data via ASOF JOIN. Use this when a source type is missing the identifier you need.
-
-```
-source_type=squid_proxy | resolve_identity | where src_host="srv-web06"
-```
-
-- **Default field**: `src_ip` — resolves IP to hostname/user/MAC
-- **Custom field**: `| resolve_identity field=dest_ip` — resolve a different IP field
-- **Max age**: `| resolve_identity max_age=4h` — only use observations from the last 4h (default 24h)
-- **Output fields added**: `src_host`, `user`, `src_mac`, `identity_confidence` (high/medium/low/stale/none), `identity_source`, `identity_fqdn`
-
-**Confidence levels** (based on observation age relative to the event):
-- `high`: identity observed within 1 hour of event
-- `medium`: within 4 hours
-- `low`: within 24 hours
-- `stale`: older than 24 hours
-- `none`: no identity found
-
-### `asset` command
-
-Creates a comprehensive asset-centric view that automatically resolves all identities (IPs, hostnames, users) associated with an asset, then queries all activity across those identities.
-
-```
-src_host="srv-web06" | asset
-src_ip="10.2.1.76" | asset field=src_ip
-user="svc_web" | asset sections=auth,process max_age=7d
-```
-
-Sections: `network`, `process`, `auth`, `file`, `dns`, `alerts` (default: all).
-
-### When to use identity resolution
-
-- **Cross-source correlation**: Proxy logs have `src_ip` but not `src_host`? Use `| resolve_identity` to map IP → hostname before filtering by host.
-- **Don't manually guess mappings**: Never hardcode or assume hostname-to-IP relationships. Let the identity system resolve them.
-- **Pivoting from host to IP (or vice versa)**: When you know a hostname from EDR and need to search proxy/firewall logs by IP, use `resolve_identity` or `asset` instead of manually discovering the IP and searching separately.
-- **NAT awareness**: IPs with 3+ hosts in the same hour are flagged as NAT candidates — identity resolution on those IPs may be unreliable.
-
-### Priority order for identity sources
-
-Static assets (100) > DHCP (80) > EDR (50) > Other (30). The system uses the highest-priority, most recent observation.
+Use observed OCSF identities (`src_endpoint.ip`, `dst_endpoint.ip`, `device.hostname`, `actor.user.name`) within a bounded time window. On hosted, use `get_entity_context` to collect risk, alerts and cases. On open core use `search` and `get_prevalence`. Never assume an IP-to-host mapping or a legacy storage table exists; establish mappings from observed events and record their time window.
 
 ## Query Refinement Protocol
 
@@ -180,7 +122,7 @@ Each `add_notebook_entry` type requires a specific content structure. **Do not**
 ### `search_executed`
 ```json
 {
-  "query": "source_type=squid_proxy | where dest_host=\"paste.ee\"",
+  "query": "metadata.log_source=squid_proxy | where dst_endpoint.hostname=\"paste.ee\"",
   "query_mode": "piped",
   "result_count": 14,
   "time_range_start": "2026-02-22T00:00:00Z",

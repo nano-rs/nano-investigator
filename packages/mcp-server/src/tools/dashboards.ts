@@ -152,7 +152,7 @@ const SCHEMA_GUIDE = {
   panel: {
     id: 'string, unique within the dashboard. Must match exactly one layout.items[].i',
     title: 'string',
-    query: 'nPL (piped) or ClickHouse SQL — see queryMode',
+    query: 'nPL (piped) or deployment-supported SQL — see queryMode',
     queryMode: "'piped' | 'sql'",
     visualizationType: AUTHORABLE_VIZ,
     visualizationConfig: 'object; see visualizationConfig below. {} is valid.',
@@ -231,7 +231,7 @@ const SCHEMA_GUIDE = {
       {
         id: 'total',
         title: 'Denied events',
-        query: 'source_type="firewall" action="deny" host=$host | stats count',
+        query: 'metadata.log_source="firewall" activity_name="deny" device.hostname=$host | stats count',
         queryMode: 'piped',
         visualizationType: 'single_value',
         visualizationConfig: { unit: 'events', showTrend: true },
@@ -242,7 +242,7 @@ const SCHEMA_GUIDE = {
         id: 'by-port',
         title: 'Denies by destination port',
         query:
-          'source_type="firewall" action="deny" host=$host | stats count by dest_port | sort -count | head 10',
+          'metadata.log_source="firewall" activity_name="deny" device.hostname=$host | stats count by dst_endpoint.port | sort -count | head 10',
         queryMode: 'piped',
         visualizationType: 'bar',
         visualizationConfig: { orientation: 'vertical' },
@@ -693,7 +693,7 @@ export const TOOLS = [
         query_mode: {
           type: 'string',
           enum: ['piped', 'sql'],
-          description: "'piped' for nPL, 'sql' for ClickHouse SQL.",
+          description: "'piped' for nPL, 'sql' for deployment-supported SQL.",
         },
         start_time: {
           type: 'string',

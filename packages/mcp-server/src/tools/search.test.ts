@@ -46,16 +46,6 @@ describe('TOOLS registration', () => {
     expect(sql!.inputSchema.required).toEqual(['sql']);
   });
 
-  it('search_sql description embeds the perf rules', () => {
-    const sql = TOOLS.find((t) => t.name === 'search_sql');
-    expect(sql!.description).toContain('one `WHERE` clause');
-    expect(sql!.description).toContain('Do not write an explicit `PREWHERE`');
-    expect(sql!.description).toContain('iLike');
-    expect(sql!.description).toContain('lower(source_type)');
-    expect(sql!.description).toContain('NAN-1026');
-    expect(sql!.description).not.toMatch(/hasToken\([^)]*_search/);
-  });
-
   it('search (nPL) description declares the safe default', () => {
     const npl = TOOLS.find((t) => t.name === 'search');
     expect(npl!.description).toContain('PRIMARY search tool');
@@ -393,10 +383,10 @@ describe('handleSearchTool: get_field_values coverage', () => {
 
 describe('handleSearchTool: get_schema', () => {
   const udmFields = [
-    { name: 'src_ip', column_name: 'src_ip', data_type: 'String', category: 'Network', description: 'Source IP' },
-    { name: 'dest_ip', column_name: 'dest_ip', data_type: 'String', category: 'Network', description: 'Dest IP' },
-    { name: 'process_name', column_name: 'process_name', data_type: 'String', category: 'Process', description: 'Process name' },
-    { name: 'user', column_name: 'user', data_type: 'String', category: 'Auth', description: 'User' },
+    { name: 'src_endpoint.ip', type: 'ip_address', prewhere: true, search: false, category: 'Network', description: 'Source IP' },
+    { name: 'dst_endpoint.ip', type: 'ip_address', prewhere: true, search: false, category: 'Network', description: 'Dest IP' },
+    { name: 'process.file.name', type: 'string', prewhere: false, search: false, category: 'Process', description: 'Process name' },
+    { name: 'actor.user.name', type: 'string', prewhere: false, search: false, category: 'Auth', description: 'User' },
   ];
 
   it('returns udm_fields, all_categories, and ext_fields', async () => {

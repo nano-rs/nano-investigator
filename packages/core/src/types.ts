@@ -23,6 +23,8 @@ export interface SearchRequest {
 }
 
 export interface SearchResponse {
+  job_id?: string;
+  has_more?: boolean;
   results: Record<string, unknown>[];
   total_count: number;
   execution_time_ms: number;
@@ -108,17 +110,23 @@ export interface FieldValuesResponse {
 // UDM Schema Types
 // ============================================================================
 
-export interface UdmFieldInfo {
+export interface SchemaFieldInfo {
   name: string;
-  column_name: string;
-  data_type: string;
+  type: string;
   category: string;
-  description: string;
+  entity_type?: string;
+  prewhere: boolean;
+  search: boolean;
 }
-
-export interface UdmFieldsResponse {
-  fields: UdmFieldInfo[];
+export interface SchemaFieldsResponse {
+  schema: string;
+  schema_version?: string;
+  strict_canonical_fields: boolean;
+  fields: SchemaFieldInfo[];
 }
+/** Compatibility aliases for older SDK consumers. */
+export type UdmFieldInfo = SchemaFieldInfo;
+export type UdmFieldsResponse = SchemaFieldsResponse;
 
 // ============================================================================
 // Saved Search Types

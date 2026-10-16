@@ -80,37 +80,37 @@ After gathering context, assess:
 ## Phase 3 — Deep Dive (only the interesting branches)
 Based on entity type:
 
-**Tool choice for Phase 3 queries:** The example queries below are nPL and idiomatic — use them as-is. Reach for \`search_sql\` instead when you need: cross-table joins (logs ↔ signals, ASOF \`identity_observations\` for IP→host resolution), JSON \`ext.*\` column access for source-specific fields, or \`uniqMerge\` aggregates against \`*_prevalence_summary\` tables. Call \`get_schema\` if you're unsure what columns are available.
+**Tool choice for Phase 3 queries:** Use search with canonical OCSF fields and bounded time windows. Read get_schema first. Hosted tenants do not expose raw SQL.
 
 ${entityType === 'ip' ? `**IP Investigation:**
 - What internal hosts communicated with it? What ports/protocols?
 - Is it associated with any known threats? (IOC check)
 - Temporal pattern: regular intervals (beaconing)? Burst traffic (exfil)?
-- Query: \`dest_ip="${entity}" | stats count, sum(bytes_out) as bytes, dc(src_ip) as sources by dest_port\`
-- Query: \`src_ip="${entity}" | stats count, dc(dest_ip) as targets by dest_port\`` : ''}
+- Query: \`dst_endpoint.ip="${entity}" | stats count, sum(traffic.bytes_out) as bytes, dc(src_endpoint.ip) as sources by dst_endpoint.port\`
+- Query: \`src_endpoint.ip="${entity}" | stats count, dc(dst_endpoint.ip) as targets by dst_endpoint.port\`` : ''}
 
 ${entityType === 'user' ? `**User Investigation:**
 - What hosts did they access? Any privilege escalation?
 - Off-hours activity?
-- Query: \`user="${entity}" | stats count, values(dest_host), values(auth_result) by src_ip\`
-- Query: \`user="${entity}" | where action CONTAINS "privilege" OR action CONTAINS "sudo"\`` : ''}
+- Query: \`actor.user.name="${entity}" | stats count, values(dst_endpoint.hostname), values(status) by src_endpoint.ip\`
+- Query: \`actor.user.name="${entity}" | where activity_name CONTAINS "privilege" OR action CONTAINS "sudo"\`` : ''}
 
 ${entityType === 'host' ? `**Host Investigation:**
 - What processes ran? Any rare binaries?
 - What network connections? Any unusual destinations?
-- Query: \`src_host="${entity}" | stats count by process_name | sort -count\`
-- Query: \`src_host="${entity}" | where dest_port NOT IN (80, 443, 53) | stats count by dest_ip, dest_port\`` : ''}
+- Query: \`device.hostname="${entity}" | stats count by process.file.name | sort -count\`
+- Query: \`device.hostname="${entity}" | where dst_endpoint.port NOT IN (80, 443, 53) | stats count by dst_endpoint.ip, dst_endpoint.port\`` : ''}
 
 ${entityType === 'hash' ? `**Hash Investigation:**
 - Prevalence across the environment — how many hosts have this hash?
 - When was it first seen? Is it new?
 - What process name is associated with it?
-- Query: \`process_hash="${entity}" | stats count, dc(src_host) as hosts by process_name\`` : ''}
+- Query: \`file.hashes.value="${entity}" | stats count, dc(device.hostname) as hosts by process.file.name\`` : ''}
 
 ${entityType === 'domain' ? `**Domain Investigation:**
 - Prevalence — how many hosts resolved this domain?
 - DNS query patterns — volume, timing, subdomain enumeration
-- Query: \`dns_query CONTAINS "${entity}" | stats count, dc(src_ip) as resolvers, dc(dns_query) as subdomains by dns_response_code\`` : ''}
+- Query: \`query.hostname CONTAINS "${entity}" | stats count, dc(src_endpoint.ip) as resolvers, dc(query.hostname) as subdomains by rcode\`` : ''}
 
 Ask the analyst which threads to pull further after presenting Phase 3 findings.`,
         },

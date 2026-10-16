@@ -61,7 +61,7 @@ export const TOOLS = [
           description: 'Entity type (e.g., "ip", "user", "host")',
         },
       },
-      required: ['entity'],
+      required: ['entity', 'entity_type'],
     },
   },
   {

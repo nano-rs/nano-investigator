@@ -54,7 +54,7 @@ Gather data in parallel where possible, then present a concise briefing.
 - Any alerting rules with zero matches recently? (possible data source issue)
 
 ## 5. ENVIRONMENT HEALTH
-- Call health_check — is ClickHouse healthy? PostgreSQL healthy?
+- Call health_check — are the API and lake search services healthy?
 - Any log source gaps or ingestion issues?
 
 ## Present as a Concise Briefing

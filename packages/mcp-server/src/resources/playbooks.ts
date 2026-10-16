@@ -20,12 +20,12 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 1: Scope the Attack
 - Search for the alerting source IP's authentication activity
-- Query: \`source_type=auth | where src_ip="{ip}" | stats count by user, dest_host, auth_result\`
+- Query: \`metadata.log_source=auth | where src_endpoint.ip="{ip}" | stats count by actor.user.name, dst_endpoint.hostname, status\`
 - How many users targeted? How many hosts? Success vs failure ratio?
 
 ## Step 2: Check for Successful Auth
 - CRITICAL: Did any attempts succeed?
-- Query: \`src_ip="{ip}" auth_result=success\`
+- Query: \`src_endpoint.ip="{ip}" status=success\`
 - If yes → this is now an incident, not just an attempt
 
 ## Step 3: Entity Context
@@ -36,13 +36,13 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 4: Blast Radius (if successful auth)
 - What did the compromised account do after login?
-- Query: \`user="{user}" | sort timestamp | table timestamp, source_type, action, dest_host, process_name\`
+- Query: \`actor.user.name="{user}" | sort time | table time, metadata.log_source, action, dst_endpoint.hostname, process.file.name\`
 - Look for: lateral movement, privilege escalation, data access
 
 ## Step 5: Historical Context
 - Have we seen similar attacks? (get_related_cases)
-- Is this part of a campaign? Search for same src_ip in last 30 days
-- Query: \`src_ip="{ip}" | timechart span=1d count by auth_result\`
+- Is this part of a campaign? Search for same src_endpoint.ip in last 30 days
+- Query: \`src_endpoint.ip="{ip}" | timechart span=1d count by status\`
 
 ## Step 6: Recommend Action
 - **FP**: Known scanner, expected behavior → close alert
@@ -58,22 +58,22 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 1: Identify the Pivot Point
 - Which host initiated outbound connections to other internal hosts?
-- Query: \`src_ip="{ip}" | where is_private_ip(dest_ip) | stats count, dc(dest_ip) as targets by dest_port\`
+- Query: \`src_endpoint.ip="{ip}" | where is_private_ip(dst_endpoint.ip) | stats count, dc(dst_endpoint.ip) as targets by dst_endpoint.port\`
 - Key ports: 445 (SMB), 135 (RPC), 3389 (RDP), 5985/5986 (WinRM), 22 (SSH)
 
 ## Step 2: Map the Network Path
 - Build a timeline of connections from the source host
-- Query: \`src_ip="{ip}" | where dest_port IN (445, 135, 3389, 5985, 22) | sort timestamp | table timestamp, dest_ip, dest_port, user\`
+- Query: \`src_endpoint.ip="{ip}" | where dst_endpoint.port IN (445, 135, 3389, 5985, 22) | sort time | table time, dst_endpoint.ip, dst_endpoint.port, actor.user.name\`
 - Which hosts were accessed? In what order?
 
 ## Step 3: Check Authentication on Target Hosts
 - For each target host, check logon events
-- Query: \`source_type=windows_security | where event_id=4624 AND logon_type=3 AND src_ip="{ip}" | table timestamp, dest_host, user, logon_type\`
+- Query: \`metadata.log_source=windows_security | where metadata.event_code=4624 AND logon_type_id=3 AND src_endpoint.ip="{ip}" | table time, dst_endpoint.hostname, actor.user.name, logon_type_id\`
 - Were new accounts created? Were privileges escalated?
 
 ## Step 4: Process Execution on Targets
 - What was executed on the target hosts?
-- Query: \`src_host="{target_host}" | where process_name IN ("psexec.exe", "wmic.exe", "powershell.exe", "cmd.exe") | table timestamp, user, process_name, command_line, parent_process\`
+- Query: \`device.hostname="{target_host}" | where process.file.name IN ("psexec.exe", "wmic.exe", "powershell.exe", "cmd.exe") | table time, actor.user.name, process.file.name, process.cmd_line, process.parent_process.file.path\`
 - Look for: remote execution tools, encoded commands, suspicious scripts
 
 ## Step 5: Assess Spread
@@ -96,28 +96,28 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 1: Identify the Data Flow
 - Which host is sending data, where, and how much?
-- Query: \`src_ip="{ip}" | stats sum(bytes_out) as total_sent, count by dest_ip, dest_port | sort -total_sent\`
+- Query: \`src_endpoint.ip="{ip}" | stats sum(traffic.bytes_out) as total_sent, count by dst_endpoint.ip, dst_endpoint.port | sort -total_sent\`
 - Is the volume unusual for this host?
 
 ## Step 2: Check the Channel
 - What protocol/method is being used?
-- DNS tunneling: \`src_ip="{ip}" | where dest_port=53 | stats dc(dns_query) as unique_queries, count by dest_ip\`
-- HTTP/S uploads: \`src_ip="{ip}" | where http_method="POST" | stats sum(bytes_out) by url | sort -sum\`
+- DNS tunneling: \`src_endpoint.ip="{ip}" | where dst_endpoint.port=53 | stats dc(query.hostname) as unique_queries, count by dst_endpoint.ip\`
+- HTTP/S uploads: \`src_endpoint.ip="{ip}" | where http_method="POST" | stats sum(traffic.bytes_out) by url | sort -sum\`
 - Cloud storage: Check for uploads to known cloud storage domains
 
 ## Step 3: Timeline Analysis
 - When did the exfiltration start?
-- Query: \`src_ip="{ip}" dest_ip="{dest}" | timechart span=1h sum(bytes_out) as bytes_sent\`
+- Query: \`src_endpoint.ip="{ip}" dst_endpoint.ip="{dest}" | timechart span=1h sum(traffic.bytes_out) as bytes_sent\`
 - Is it continuous or bursty? Regular intervals suggest automation/C2
 
 ## Step 4: What Data Was Accessed
 - Before exfiltration, what files/data was accessed on the host?
-- Query: \`src_host="{host}" | where file_action IN ("accessed", "read", "copied") | sort timestamp | table timestamp, file_path, file_size, process_name\`
+- Query: \`device.hostname="{host}" | where activity_name IN ("accessed", "read", "copied") | sort time | table time, file.path, file_size, process.file.name\`
 - Look for: bulk file access, database exports, archive creation (zip, 7z, tar)
 
 ## Step 5: Data Staging
 - Was data compressed/archived before exfiltration?
-- Query: \`src_host="{host}" | where process_name IN ("7z.exe", "rar.exe", "zip.exe", "tar") | table timestamp, command_line, file_path\`
+- Query: \`device.hostname="{host}" | where process.file.name IN ("7z.exe", "rar.exe", "zip.exe", "tar") | table time, process.cmd_line, file.path\`
 
 ## Step 6: Recommend Action
 - Calculate total data volume exfiltrated
@@ -135,7 +135,7 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 ## Step 1: Identify the Suspicious Process
 - What process triggered the alert?
 - Use get_detection to read the rule and ai_triage_hints
-- Query: \`src_host="{host}" process_name="{process}" | table timestamp, user, command_line, parent_process, process_hash\`
+- Query: \`device.hostname="{host}" process.file.name="{process}" | table time, actor.user.name, process.cmd_line, process.parent_process.file.path, file.hashes.value\`
 
 ## Step 2: Check Prevalence
 - Is this binary/process common in the environment?
@@ -144,22 +144,22 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 3: Process Ancestry
 - What spawned this process? Build the process tree
-- Query: \`src_host="{host}" | where process_id="{pid}" OR parent_process_id="{pid}" | sort timestamp | table timestamp, process_name, command_line, parent_process, process_id, parent_process_id\`
+- Query: \`device.hostname="{host}" | where process.pid="{pid}" OR process.parent_process.pid="{pid}" | sort time | table time, process.file.name, process.cmd_line, process.parent_process.file.path, process.pid, process.parent_process.pid\`
 - Suspicious chains: browser → cmd → powershell, explorer → script → executable
 
 ## Step 4: Network Activity
 - What did the suspicious process connect to?
-- Query: \`src_host="{host}" process_name="{process}" | where dest_ip != "" | stats count by dest_ip, dest_port\`
+- Query: \`device.hostname="{host}" process.file.name="{process}" | where dst_endpoint.ip != "" | stats count by dst_endpoint.ip, dst_endpoint.port\`
 - Check destinations with lookup_ip; flag threat-intel hits via the ioc_matched / ioc_threat_type columns
 
 ## Step 5: File Activity
 - What files did the process create/modify?
-- Query: \`src_host="{host}" process_name="{process}" | where file_path != "" | table timestamp, file_action, file_path, file_hash\`
+- Query: \`device.hostname="{host}" process.file.name="{process}" | where file.path != "" | table time, activity_name, file.path, file.hashes.value\`
 - Look for: persistence (startup, scheduled tasks, services), payloads dropped
 
 ## Step 6: Lateral Check
 - Is the same binary/process on other hosts?
-- Query: \`process_hash="{hash}" | stats count, dc(src_host) as host_count by process_name\`
+- Query: \`file.hashes.value="{hash}" | stats count, dc(device.hostname) as host_count by process.file.name\`
 - If on multiple hosts, this may be a wider compromise
 
 ## Step 7: Recommend Action
@@ -182,17 +182,17 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 2: Check for Clicks/Interaction
 - Did anyone click the link or open the attachment?
-- Query: \`url CONTAINS "{phishing_domain}" | stats count by src_ip, user\`
-- Query: \`file_name="{attachment}" | stats count by src_host, user, file_action\`
+- Query: \`url CONTAINS "{phishing_domain}" | stats count by src_endpoint.ip, actor.user.name\`
+- Query: \`file.name="{attachment}" | stats count by device.hostname, actor.user.name, activity_name\`
 
 ## Step 3: Post-Click Activity
 - For users who clicked, what happened next?
-- Query: \`user="{compromised_user}" | sort timestamp | table timestamp, source_type, action, src_ip, dest_ip, process_name\`
+- Query: \`actor.user.name="{compromised_user}" | sort time | table time, metadata.log_source, action, src_endpoint.ip, dst_endpoint.ip, process.file.name\`
 - Look for: credential theft (login from new IP), malware download, macro execution
 
 ## Step 4: Credential Compromise
 - Were credentials entered on the phishing site?
-- Query: \`user="{user}" | where auth_result="success" | stats values(src_ip) by dest_host\`
+- Query: \`actor.user.name="{user}" | where status="success" | stats values(src_endpoint.ip) by dst_endpoint.hostname\`
 - New source IPs appearing after the phishing email = likely compromise
 
 ## Step 5: Campaign Scope
@@ -216,28 +216,28 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 1: Establish Baseline Behavior
 - What is normal activity for this user?
-- Query: \`user="{user}" | timechart span=1d count by source_type\` (30-day lookback)
+- Query: \`actor.user.name="{user}" | timechart span=1d count by metadata.log_source\` (30-day lookback)
 - When do they normally work? What systems do they access?
 
 ## Step 2: Identify Anomalies
 - What changed? Look for deviations from baseline
 - Off-hours activity: Query with time filters outside business hours
-- New systems accessed: \`user="{user}" | stats min(timestamp) as first_access by dest_host | where first_access > "{recent_date}"\`
+- New systems accessed: \`actor.user.name="{user}" | stats min(time) as first_access by dst_endpoint.hostname | where first_access > "{recent_date}"\`
 - Volume anomalies: Sudden increase in data access/transfer
 
 ## Step 3: Data Access Patterns
 - What sensitive data is being accessed?
-- Query: \`user="{user}" | where file_path CONTAINS "confidential" OR file_path CONTAINS "restricted" | table timestamp, file_path, file_action, src_host\`
+- Query: \`actor.user.name="{user}" | where file.path CONTAINS "confidential" OR file.path CONTAINS "restricted" | table time, file.path, activity_name, device.hostname\`
 - Bulk downloads or copies to removable media
 
 ## Step 4: Communication Channels
 - Is data being sent externally?
-- Query: \`user="{user}" | where dest_port IN (25, 587, 443) | stats sum(bytes_out) as total_sent by dest_ip | sort -total_sent\`
+- Query: \`actor.user.name="{user}" | where dst_endpoint.port IN (25, 587, 443) | stats sum(traffic.bytes_out) as total_sent by dst_endpoint.ip | sort -total_sent\`
 - Personal email, cloud storage, USB drives
 
 ## Step 5: Account Activity
 - Multiple accounts? Privilege escalation?
-- Query: \`src_ip IN ({user_ips}) | stats dc(user) as identities, values(user) by src_ip\`
+- Query: \`src_endpoint.ip IN ({user_ips}) | stats dc(actor.user.name) as identities, values(actor.user.name) by src_endpoint.ip\`
 - Shared account usage, service account access
 
 ## Step 6: Context and Intent

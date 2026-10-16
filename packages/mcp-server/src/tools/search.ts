@@ -145,43 +145,14 @@ const TOOL_DEFINITIONS = [
     name: 'search_sql',
     annotations: { readOnlyHint: true },
     description:
-      'Advanced search tool. Run a ClickHouse SQL SELECT against the SIEM log store. Prefer `search` (nPL) for normal investigations; use raw SQL only for queries nPL cannot express, such as cross-table joins, prevalence-state aggregates, or direct `ext` JSON access.\n' +
-      '\n' +
-      'On first use in a session, call `get_schema` to load the UDM column inventory. For canonical query recipes (prevalence lookups, top-N, time bucketing, ASOF identity joins, etc.) read the `nano://sql-guide` resource.\n' +
-      '\n' +
-      'PERFORMANCE RULES — follow every time:\n' +
-      '  1. Use one `WHERE` clause for the timestamp filter and every other predicate. Do not write an explicit `PREWHERE`; ClickHouse moves eligible filters automatically. The timestamp filter is non-negotiable — without it, ClickHouse cannot prune daily partitions and scans everything:\n' +
-      "       WHERE timestamp >= '...' AND timestamp <= '...'\n" +
-      "         AND lower(source_type) = lower(\'windows\')\n" +
-      "         AND lower(message) iLike \'%logon failure%\'\n" +
-      '  2. Case-insensitive free-text search: use `lower(field) iLike \'%needle%\'`. Text indexes (splitByNonAlpha tokenizer, granularity 1) on `lower(message)`, `lower(command_line)`, `lower(user)`, `lower(process_name)`, `lower(file_path)`, etc. keep this fast. **Do NOT use `hasToken(...)` for variable-length needles — it silently misses substrings (NAN-1026).**\n' +
-      '  3. `lower()` consistency — case-sensitive fields like `source_type` need `lower()` on both sides of the comparison.\n' +
-      '  4. **`ext` is a ClickHouse JSON column** — access with `ext.field_name` or `ext[\'field_name\']`, NOT JSONExtract. Use JSONExtract only on the legacy `metadata` String column.\n' +
-      '  5. UDM columns are real columns (src_ip, process_name, user, file_hash, etc.) — access directly, never through `ext`.\n' +
-      `  6. Always include an explicit LIMIT. Default ${DEFAULT_MCP_RESULT_LIMIT}; the interactive MCP surface refuses more than ${MAX_MCP_RESULT_LIMIT} returned rows.\n` +
-      '  7. Tables (allowlisted): `logs` (raw events), `signals` (detection matches), `*_prevalence_summary` / `*_prevalence_agg` (prevalence — AggregatingMergeTree, query with uniqMerge for host_count), `identity_observations` (use ASOF JOIN for IP→hostname enrichment).\n' +
-      '\n' +
-      'TIME RANGE:\n' +
-      '  - Both `start_time` and `end_time` are optional; omit both for the last 24h default.\n' +
-      '  - Accept relative ("-1h", "-7d", "-30m"), "now", or ISO 8601.\n' +
-      '  - You must STILL include `timestamp >= ? AND timestamp <= ?` (or `BETWEEN`) in the single `WHERE` clause — the time params bind the request envelope; the SQL controls partition pruning.\n' +
-      '\n' +
-      'EXAMPLE:\n' +
-      '  SELECT timestamp, src_ip, user, message\n' +
-      '  FROM logs\n' +
-      "  WHERE timestamp BETWEEN \'2026-05-25T00:00:00Z\' AND \'2026-05-26T00:00:00Z\'\n" +
-      "    AND lower(source_type) = lower(\'windows\')\n" +
-      "    AND lower(message) iLike \'%logon failure%\'\n" +
-      '  ORDER BY timestamp DESC\n' +
-      '  LIMIT 100\n' +
-      '\n' +
-      'Only SELECT is accepted; DROP/INSERT/UPDATE/etc. are rejected. Dangerous functions (SLEEP, HOSTNAME, system introspection) are blocked.',
+      'Advanced SQL search. Availability depends on deployment; hosted tenants reject raw SQL. Prefer search with canonical OCSF 1.9 paths. ' +
+      'Read get_schema first. Supply an explicit time range and LIMIT, at most 1000 rows. Do not assume legacy storage tables or database functions exist.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         sql: {
           type: 'string',
-          description: 'The ClickHouse SELECT query. Use one WHERE clause and include a timestamp filter for partition pruning; do not write an explicit PREWHERE.',
+          description: 'A read-only SELECT supported by this deployment; include explicit time bounds and LIMIT.',
         },
         start_time: {
           type: 'string',
@@ -205,21 +176,14 @@ const TOOL_DEFINITIONS = [
     name: 'get_schema',
     annotations: { readOnlyHint: true },
     description:
-      'Return the UDM (Unified Data Model) schema for the log store. Call this before writing SQL the first time in a session so you know which columns exist and avoid hallucinating field names.\n' +
-      '\n' +
-      'Returns:\n' +
-      '  - `udm_fields`: explicit columns with name, column_name, data_type, category, description. Several hundred fields grouped by category (Auth, Network, Process, File, Enrichment, Prevalence, etc.). When `category` is set, this is filtered; the inventory below stays complete.\n' +
-      '  - `all_categories`: every UDM category and its total field count (always full, even when `category` filter is set — gives you a map of what else exists).\n' +
-      '  - `ext_fields`: observed JSON keys in the `ext` column for per-source structured data.\n' +
-      '  - `warnings` (optional): non-fatal issues encountered while loading the schema (e.g. ext fetch failed).\n' +
-      '\n' +
-      'When writing SQL: prefer UDM columns directly. For non-UDM data, the `ext` column is a ClickHouse JSON type — access with `ext.field_name` or `ext[\'field_name\']`, NOT JSONExtract.',
+      'Return the active lake schema, version, canonical field paths and categories. Call before constructing queries. ' +
+      'Legacy udm_fields keys remain aliases of fields for existing clients.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         category: {
           type: 'string',
-          description: 'Optional. Filter UDM fields to a single category (e.g. "Network", "Process", "Auth", "Enrichment"). Omit to return all fields.',
+          description: 'Optional. Filter schema fields to a single category (e.g. "Network", "Process", "Auth", "Enrichment"). Omit to return all fields.',
         },
         include_ext: {
           type: 'boolean',
@@ -233,18 +197,18 @@ const TOOL_DEFINITIONS = [
     name: 'search',
     annotations: { readOnlyHint: true },
     description:
-      'PRIMARY search tool. Execute an nPL (nano Pipe Language) query — Splunk-compatible piped syntax — against the SIEM log data. Use this for normal investigations because it is permission-safe, source-scope aware, and covers filters, tables, stats, and timecharts.\n' +
+      'PRIMARY search tool. Execute an nPL (nano Pipe Language) query using piped syntax against the SIEM log data. Use this for normal investigations because it is permission-safe, source-scope aware, and covers filters, tables, stats, and timecharts.\n' +
       '\n' +
-      'Use `search_sql` only when nPL cannot express the query, such as a cross-table join, a prevalence-state aggregate, or direct `ext` JSON access.\n' +
+      'Use `search_sql` only when nPL cannot express the query and this deployment supports SQL. Hosted tenants use nPL.\n' +
       '\n' +
       `RESULT BOUNDARY: \`limit\` caps returned rows or aggregate groups, not the matching events used to compute an aggregate. The MCP surface refuses requests above ${MAX_MCP_RESULT_LIMIT} rows and returns an actionable error if an older backend violates the requested limit; it never silently slices aggregate output. For a meaningful top-N, sort before \`head\`/\`limit\`.\n` +
       '\n' +
       'REX QUOTING: If a regex contains JSON-style double quotes, wrap the whole pattern in SINGLE quotes: `| rex field=message \'"KEY":"(?<value>[^\"]+)"\'`. Backslash does not escape a double-quoted nPL delimiter; this spelling also works on older nano backends.\n' +
       '\n' +
       'Examples:\n' +
-      '  - "src_ip=10.0.0.0/8 | stats count by dest_ip, dest_port | sort -count"\n' +
-      '  - "process_name=powershell.exe | table timestamp, user, command_line"\n' +
-      '  - "source_type=firewall | timechart span=1h count by action"\n' +
+      '  - "src_endpoint.ip=10.0.0.0/8 | stats count by dst_endpoint.ip, dst_endpoint.port | sort -count"\n' +
+      '  - "process.file.name=powershell.exe | table time, actor.user.name, process.cmd_line"\n' +
+      '  - "metadata.log_source=firewall | timechart span=1h count by action"\n' +
       'Pipe commands: stats, where, sort, head, table, timechart, eval, dedup, rename, rex.\n' +
       'Time arguments accept relative ("-15m", "-1h", "-7d"), "now", or ISO 8601.',
     inputSchema: {
@@ -270,7 +234,7 @@ const TOOL_DEFINITIONS = [
         },
         source_type: {
           type: 'string',
-          description: 'Filter to a specific log source type (e.g. "windows", "firewall", "dns", "proxy").',
+          description: 'Deprecated: use metadata.log_source in the query before aggregation. The lake API does not accept this separate filter.',
         },
       },
       required: ['query', 'start_time'],
@@ -318,7 +282,7 @@ const TOOL_DEFINITIONS = [
       properties: {
         field: {
           type: 'string',
-          description: 'The field name to get top values for (e.g. "src_ip", "process_name", "user", "dest_port").',
+          description: 'The field name to get top values for (e.g. "src_endpoint.ip", "process.file.name", "actor.user.name", "dst_endpoint.port").',
         },
         query: {
           type: 'string',
@@ -553,7 +517,7 @@ export async function handleSearchTool(
 
         if (!udmResult.success) {
           return {
-            content: [{ type: 'text', text: `Error: ${udmResult.error?.message ?? 'Failed to load UDM schema'}` }],
+            content: [{ type: 'text', text: `Error: ${udmResult.error?.message ?? 'Failed to load schema'}` }],
             isError: true,
           };
         }
@@ -570,6 +534,10 @@ export async function handleSearchTool(
 
         const warnings: string[] = [];
         const response: Record<string, unknown> = {
+          schema: udmResult.data?.schema,
+          schema_version: udmResult.data?.schema_version,
+          strict_canonical_fields: udmResult.data?.strict_canonical_fields,
+          fields: filtered,
           udm_fields: filtered,
           udm_field_count: filtered.length,
           all_categories: Object.entries(categoryCounts)

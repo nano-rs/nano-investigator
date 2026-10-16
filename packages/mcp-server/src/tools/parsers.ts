@@ -11,7 +11,7 @@
  *   1. get_source_types / list_log_sources — see what already exists
  *   2. write VRL (read the vrl-parsers reference first)
  *   3. validate_vrl — compile-check
- *   4. test_parse_sample — run against a real sample line, inspect UDM output
+ *   4. test_parse_sample — run against a real sample line, inspect OCSF output
  *   5. create_log_source — save as a working copy (NOT live)
  *   6. publish_log_source — promote the working copy and push it to Vector
  *   7. get_log_source_health — confirm events are actually flowing
@@ -82,7 +82,7 @@ export const TOOLS = [
     name: 'test_parse_sample',
     annotations: { readOnlyHint: true },
     description:
-      'Run VRL against ONE sample log line and return the parsed output { success, output, extracted_field_count, error }. Inspect `output.udm.*` to confirm fields mapped correctly. Iterate validate_vrl + test_parse_sample until the UDM mapping is right, THEN save.',
+      'Run VRL against ONE sample log line and return the parsed output { success, output, extracted_field_count, error }. Inspect `output.*` to confirm fields mapped correctly. Iterate validate_vrl + test_parse_sample until the OCSF mapping is right, THEN save.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -97,7 +97,7 @@ export const TOOLS = [
     name: 'test_parse_live',
     annotations: { readOnlyHint: true },
     description:
-      'Test VRL against real recent events for an already-ingested source_type (pulled from ClickHouse), comparing the new parse against the currently deployed one. Use this when refining a parser for a source_type that is already flowing. Capped at 20 events.',
+      'Test VRL against real recent events for an already-ingested source_type (read from the lake), comparing the new parse against the currently deployed one. Use this when refining a parser for a source_type that is already flowing. Capped at 20 events.',
     inputSchema: {
       type: 'object' as const,
       properties: {

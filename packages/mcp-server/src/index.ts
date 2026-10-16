@@ -157,7 +157,7 @@ function getClient(): NanosiemClient {
     );
   }
 
-  _client = new NanosiemClient({ apiUrl, searchUrl, apiKey });
+  _client = new NanosiemClient({ apiUrl, searchUrl, apiKey, deployment: process.env.NANOSIEM_DEPLOYMENT === 'open-core' ? 'open-core' : (process.env.NANOSIEM_DEPLOYMENT === 'hosted' || new URL(apiUrl).hostname === 'us.nano.rs' ? 'hosted' : undefined) });
   return _client;
 }
 

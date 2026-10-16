@@ -32,31 +32,31 @@ svchost.exe
 
 ### Field = Value
 \`\`\`
-src_ip="10.0.0.1"
+src_endpoint.ip="10.0.0.1"
 status=500
-user=admin
-source_type=windows_security
-event_id=4625
+actor.user.name=admin
+metadata.log_source=windows_security
+metadata.event_code=4625
 \`\`\`
 
 ### Regex
 \`\`\`
-user=/admin.*/
-dns_query=/.*\\.malware\\.com$/
-process_name=/^(cmd|powershell)\\.exe$/i
+actor.user.name=/admin.*/
+query.hostname=/.*\\.malware\\.com$/
+process.file.name=/^(cmd|powershell)\\.exe$/i
 \`\`\`
 
 ### Boolean operators
 \`\`\`
-src_ip="10.0.0.1" AND dest_port=443
-user=admin OR user=root
-NOT source_type=healthcheck
+src_endpoint.ip="10.0.0.1" AND dst_endpoint.port=443
+actor.user.name=admin OR actor.user.name=root
+NOT metadata.log_source=healthcheck
 \`\`\`
 
 ### Wildcards
 \`\`\`
-process_name=svc*
-file_path=*\\\\temp\\\\*
+process.file.name=svc*
+file.path=*\\\\temp\\\\*
 \`\`\`
 
 ## Commands
@@ -64,23 +64,23 @@ file_path=*\\\\temp\\\\*
 ### where — Filter events
 \`\`\`
 | where status_code >= 400
-| where src_ip != "10.0.0.1"
-| where user IN ("admin", "root", "system")
-| where user NOT IN ("svc_account", "healthcheck")
-| where command_line CONTAINS "encoded"
-| where file_path NOT CONTAINS "/var/log"
-| where bytes_out > 1000000
+| where src_endpoint.ip != "10.0.0.1"
+| where actor.user.name IN ("admin", "root", "system")
+| where actor.user.name NOT IN ("svc_account", "healthcheck")
+| where process.cmd_line CONTAINS "encoded"
+| where file.path NOT CONTAINS "/var/log"
+| where traffic.bytes_out > 1000000
 \`\`\`
 
 ### stats — Aggregate
 \`\`\`
-| stats count by src_ip
-| stats count, dc(user) as unique_users by src_ip
-| stats sum(bytes_out) as total_bytes by src_ip, dest_ip
-| stats min(timestamp) as first_seen, max(timestamp) as last_seen by user
-| stats values(dest_host) as targets by src_ip
+| stats count by src_endpoint.ip
+| stats count, dc(actor.user.name) as unique_users by src_endpoint.ip
+| stats sum(traffic.bytes_out) as total_bytes by src_endpoint.ip, dst_endpoint.ip
+| stats min(time) as first_seen, max(time) as last_seen by actor.user.name
+| stats values(dst_endpoint.hostname) as targets by src_endpoint.ip
 | stats avg(duration) as avg_duration by endpoint
-| stats count by src_ip | where count > 100
+| stats count by src_endpoint.ip | where count > 100
 \`\`\`
 
 **Aggregation functions:** count, sum, avg, min, max, dc (distinct count), values (unique values list), list (all values)
@@ -88,23 +88,23 @@ file_path=*\\\\temp\\\\*
 ### timechart — Time-series aggregation
 \`\`\`
 | timechart span=1h count
-| timechart span=5m count by source_type
-| timechart span=1d sum(bytes_out) as daily_bytes by src_ip
+| timechart span=5m count by metadata.log_source
+| timechart span=1d sum(traffic.bytes_out) as daily_bytes by src_endpoint.ip
 \`\`\`
 
 **Span values:** 1m, 5m, 15m, 30m, 1h, 4h, 12h, 1d
 
 ### table — Select specific columns
 \`\`\`
-| table timestamp, src_ip, dest_ip, action, user
-| table timestamp, src_host, process_name, command_line, parent_process
+| table time, src_endpoint.ip, dst_endpoint.ip, action, actor.user.name
+| table time, device.hostname, process.file.name, process.cmd_line, process.parent_process.file.path
 \`\`\`
 
 ### sort — Order results
 \`\`\`
-| sort timestamp
+| sort time
 | sort -count
-| sort severity, -timestamp
+| sort severity, -time
 \`\`\`
 Prefix with \`-\` for descending order.
 
@@ -116,11 +116,11 @@ Prefix with \`-\` for descending order.
 
 ### eval — Computed fields
 \`\`\`
-| eval total_bytes = bytes_in + bytes_out
-| eval ratio = bytes_out / bytes_in
-| eval is_internal = is_private_ip(src_ip)
+| eval total_bytes = bytes_in + traffic.bytes_out
+| eval ratio = traffic.bytes_out / bytes_in
+| eval is_internal = is_private_ip(src_endpoint.ip)
 | eval domain = extract_domain(url)
-| eval cmd_length = len(command_line)
+| eval cmd_length = len(process.cmd_line)
 \`\`\`
 
 ### rex — Extract fields with regular expressions
@@ -136,20 +136,20 @@ the familiar SPL spelling \`"\\"KEY\\":..."\` is less portable than
 
 ### prevalence — Filter by prevalence
 \`\`\`
-| prevalence process_hash < 5
-| prevalence dest_ip < 10
+| prevalence file.hashes.value < 5
+| prevalence dst_endpoint.ip < 10
 \`\`\`
 Filters to artifacts seen on fewer than N hosts.
 
 ### lookup — Join with lookup tables
 \`\`\`
-| lookup threat_intel dest_ip
-| lookup asset_inventory src_host
+| lookup threat_intel dst_endpoint.ip
+| lookup asset_inventory device.hostname
 \`\`\`
 
 ### risk — Add risk scoring
 \`\`\`
-| risk score=50 entity=src_ip factor="Suspicious behavior detected"
+| risk score=50 entity=src_endpoint.ip factor="Suspicious behavior detected"
 | where failed_count > 100
 | risk score=80 factor="High volume brute force"
 \`\`\`
@@ -194,11 +194,11 @@ nPL does this automatically from the time range you provide. For best performanc
 ### Use source_type when known
 Source type is included with the time predicate, enabling partition pruning:
 \`\`\`
-source_type=windows_security | where event_id=4625
+metadata.log_source=windows_security | where metadata.event_code=4625
 \`\`\`
 is much faster than:
 \`\`\`
-event_id=4625
+metadata.event_code=4625
 \`\`\`
 
 ### Aggregations preserve input and bound output

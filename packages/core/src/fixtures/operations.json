@@ -1,0 +1,7 @@
+{
+  "alerts": [{ "id": "00000000-0000-0000-0000-000000000001", "rule_id": "00000000-0000-0000-0000-000000000002", "rule_name": "Fixture process", "severity": "high", "status": "new", "matched_events": [{ "process": { "file": { "path": "/usr/bin/sh" } }, "device": { "hostname": "fixture-host" } }], "created_at": "2026-10-15T00:00:00Z" }],
+  "rules": [{ "id": "00000000-0000-0000-0000-000000000002", "name": "Fixture process", "query": "process.file.path=\"/usr/bin/sh\"", "severity": "high", "mode": "live", "enabled": true, "mitre_tactics": [], "mitre_techniques": [], "tags": [], "match_count": 1, "created_at": "2026-10-15T00:00:00Z", "updated_at": "2026-10-15T00:00:00Z" }],
+  "prevalence": { "data": { "artifact": "example.invalid", "artifact_type": "domain", "host_count": 0, "total_occurrences": 0, "first_seen": "1970-01-01T00:00:00Z", "last_seen": "1970-01-01T00:00:00Z", "is_rare": true, "prevalence_score": 0 } },
+  "entity": { "entity": "192.0.2.1", "entity_type": "ip", "risk": null, "alerts": [], "alert_count": 0, "matches": [], "match_count": 0, "rule_contributions": [], "cases": [], "case_count": 0 },
+  "cases": { "cases": [], "total_count": 0, "limit": 1, "offset": 0 }
+}

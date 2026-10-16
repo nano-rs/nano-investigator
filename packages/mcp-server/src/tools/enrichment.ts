@@ -7,10 +7,20 @@ import { type ToolResult, ok, err } from './utils.js';
 
 export const TOOLS = [
   {
+    name: 'lookup_ioc',
+    annotations: { readOnlyHint: true },
+    description: 'Look up an indicator using the tenant threat intelligence providers. Provider availability and permissions depend on deployment.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: { artifact: { type: 'string' }, artifact_type: { type: 'string' } },
+      required: ['artifact'],
+    },
+  },
+  {
     name: 'get_entity_context',
     annotations: { readOnlyHint: true },
     description:
-      'Get rich context for any entity (IP, user, host, domain, hash). Performs a composite enrichment: searches recent activity, checks risk score, looks up alerts and cases involving this entity. This is the investigation pivot tool — call it when you encounter an entity and need to decide "is this interesting?"',
+      'Get hosted enterprise context for an entity (IP, user, host, domain, hash): risk, detection matches, alerts and cases. Requires risk:view, detections:view, alerts:view and cases:view. Open core uses search and prevalence instead.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -53,45 +63,15 @@ export async function handleEnrichmentTool(
   try {
     switch (name) {
       case 'get_entity_context': {
-        const entityType = args.entity_type as string;
-        const value = args.value as string;
+        const res = await client.getEntityContext(args.entity_type as string, args.value as string);
+        if (!res.success) return err(res.error?.message ?? 'Failed to get entity context');
+        return ok(res.data);
+      }
 
-        // Composite enrichment: gather multiple data sources in parallel
-        const results: Record<string, unknown> = {
-          entity_type: entityType,
-          value,
-        };
-
-        // Run enrichments in parallel where possible
-        const promises: Promise<void>[] = [];
-
-        // IP-specific enrichment
-        if (entityType === 'ip') {
-          promises.push(
-            client.lookupIp(value).then((res) => {
-              if (res.success) results.geo = res.data;
-            })
-          );
-        }
-
-        // Risk score for this specific entity
-        promises.push(
-          client.getEntityRiskTimeline(value, entityType).then((res) => {
-            if (res.success && res.data && res.data.entities.length > 0) {
-              const match = res.data.entities[0];
-              results.risk = {
-                score: match.risk_score,
-                level: match.risk_level,
-                finding_count: match.finding_count,
-                last_finding_at: match.last_finding_at,
-              };
-            }
-          })
-        );
-
-        await Promise.allSettled(promises);
-
-        return ok(results);
+      case 'lookup_ioc': {
+        const res = await client.lookupIoc(args.artifact as string, args.artifact_type as string | undefined);
+        if (!res.success) return err(res.error?.message ?? 'Threat intelligence unavailable');
+        return ok(res.data);
       }
 
       case 'lookup_ip': {

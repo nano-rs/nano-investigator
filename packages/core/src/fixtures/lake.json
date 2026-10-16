@@ -1,0 +1,23 @@
+{
+  "schema": {
+    "schema": "ocsf",
+    "schema_version": "1.9.0",
+    "strict_canonical_fields": true,
+    "fields": [
+      { "name": "actor.user.name", "type": "string", "category": "authentication", "entity_type": "user", "prewhere": false, "search": false },
+      { "name": "src_endpoint.ip", "type": "ip_address", "category": "network", "entity_type": "ip", "prewhere": true, "search": false },
+      { "name": "device.hostname", "type": "string", "category": "device", "entity_type": "host", "prewhere": false, "search": false },
+      { "name": "metadata.log_source", "type": "string", "category": "metadata", "prewhere": true, "search": false },
+      { "name": "process.file.path", "type": "string", "category": "process", "prewhere": false, "search": false }
+    ]
+  },
+  "accepted": { "job_id": "job-fixture", "status": "queued" },
+  "running": { "job_id": "job-fixture", "status": "running", "progress": { "rows_scanned": 10, "rows_total": 20, "percent": 50, "elapsed_ms": 5 } },
+  "completed": { "job_id": "job-fixture", "status": "completed", "durable_result": { "rows": 2, "pages": 2, "page_rows": 1, "has_more": true } },
+  "pages": [
+    { "page": 0, "pages": 2, "total_rows": 2, "row_offset": 0, "rows": [{ "device.hostname": "host-a", "count": 3 }] },
+    { "page": 1, "pages": 2, "total_rows": 2, "row_offset": 1, "rows": [{ "device.hostname": "host-b", "count": 2 }] }
+  ],
+  "inline": { "results": [{ "actor.user.name": "analyst", "src_endpoint.ip": "192.0.2.1" }], "total_count": 1, "execution_time_ms": 2, "fields": [] },
+  "closed": { "error": "route_not_available", "message": "This endpoint is not available for hosted tenants" }
+}

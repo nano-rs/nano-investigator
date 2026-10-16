@@ -47,15 +47,15 @@ ${
 }
 Follow this workflow. Do NOT skip validation or testing.
 
-1. **READ THE GUIDE** — load the \`nanosiem://reference/vrl-parsers\` resource. It has the input/output contract, the rules nano's VRL validator enforces, the forbidden functions, and copy-paste skeletons. Also skim \`nanosiem://schema/udm\` for the right UDM field names.
+1. **READ THE GUIDE** — load the \`nanosiem://reference/vrl-parsers\` resource. It has the input/output contract, the rules nano's VRL validator enforces, the forbidden functions, and copy-paste skeletons. Also skim \`nanosiem://schema/udm\` for canonical OCSF 1.9 fields.
 
 2. **CHECK FOR DUPLICATES** — call \`list_log_sources\` and check whether one already claims "${sourceType}" (as its \`source_type\`, or — for a routed feed — in its \`match_values\`; \`get_log_source\` to inspect). If so, edit it (\`get_log_source\` → \`update_log_source\`) rather than create a duplicate.
 
-3. **DRAFT** the VRL. Write a GENERIC parser that handles all event types for this source, not just the sample. Detect the format (JSON / XML / syslog / key-value / CSV) from the sample and pick the matching skeleton. Always: read \`.message\`, normalize \`.udm.timestamp\` to \`%Y-%m-%d %H:%M:%S\`, set \`.udm.event_type\` from the data, and \`.message = raw_log\` at the end. Never set \`.source_type\`.
+3. **DRAFT** the VRL. Write a GENERIC parser that handles all event types for this source, not just the sample. Detect the format (JSON / XML / syslog / key-value / CSV) from the sample and pick the matching skeleton. Always: read \`.message\`, normalize \`.time\` according to the OCSF parser contract, set \`.class_uid\` and \`.activity_id\` from the data, and \`.message = raw_log\` at the end. Never set \`.source_type\`.
 
 4. **VALIDATE** — call \`validate_vrl\`. If \`valid\` is false, fix every diagnostic (they carry line/col + a code like E651/E203) and re-validate. Loop until valid.
 
-5. **TEST** — call \`test_parse_sample\` with the VRL and the sample line. Inspect \`output.udm.*\`: are IPs, users, timestamps, event_type mapped correctly? \`extracted_field_count\` of 0 or a near-empty \`output.udm\` means the parser isn't actually extracting — fix it. Iterate steps 4–5 until the mapping is right.
+5. **TEST** — call \`test_parse_sample\` with the VRL and the sample line. Inspect \`output.*\`: are IPs, users, timestamps and OCSF classification mapped correctly? \`extracted_field_count\` of 0 or a near-empty \`output\` means the parser isn't actually extracting — fix it. Iterate steps 4–5 until the mapping is right.
 
 6. **SAVE** — call \`create_log_source\` with \`source_type: "routed"\` and \`match_values: ["${sourceType}"]\` (plus name + parser_vrl). This is the routed-feed convention: events arrive on a shared HTTP ingress tagged with a source_type, and the central router dispatches them to the parser whose \`match_values\` include that tag. \`source_type: "routed"\` is the sentinel that opts the parser into that router. Saves a WORKING COPY; not live yet. (Only skip this for a dedicated pull transport — Kafka/S3/PubSub — where the transport's own config carries the routing.)
 

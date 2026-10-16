@@ -42,6 +42,7 @@ Or add to your Claude Code settings (`~/.claude/settings.json`):
 |----------|----------|-------------|
 | `NANOSIEM_API_URL` | Yes | nano API URL |
 | `NANOSIEM_API_KEY` | Yes | API key for authentication |
+| `NANOSIEM_DEPLOYMENT` | No | `hosted` or `open-core`; selects capability gates. `us.nano.rs` is detected as hosted. |
 | `NANOSIEM_SEARCH_URL` | No | Search service URL (falls back to `NANOSIEM_API_URL`) |
 
 ## What You Can Do
@@ -78,9 +79,9 @@ Parser tools let you build a log-source parser (Vector VRL) end to end from the 
 ## Resources & Prompts
 
 **Resources** (context loaded into conversation):
-- `nanosiem://schema/udm` -- UDM field catalog
+- `nanosiem://schema/udm` -- OCSF 1.9 field catalog (legacy URI retained)
 - `nanosiem://reference/npl` -- nPL query language reference
-- `nanosiem://reference/vrl-parsers` -- VRL parser authoring guide (validator rules, UDM mapping, skeletons)
+- `nanosiem://reference/vrl-parsers` -- VRL parser authoring guide (validator rules, OCSF mapping, skeletons)
 - `nanosiem://reference/playbooks/{type}` -- Investigation playbooks
 
 **Prompts** (structured workflows):
@@ -114,3 +115,7 @@ See [GETTING_STARTED.md](./GETTING_STARTED.md) for the full list of required API
 ## License
 
 MIT
+
+For hosted tenants use `https://us.nano.rs/t/<tenant-slug>` as the API base URL. Keep the same tenant path in a separate search URL, if configured. The server validates that the API key belongs to that tenant. API keys use `X-API-Key`; the client sends a curl-compatible User-Agent. Redirects are refused so credentials cannot be forwarded to another host.
+
+Open-core deployments should set `NANOSIEM_DEPLOYMENT=open-core` so enterprise tools return an explicit unavailable message. Hosted case/notebook operations requiring browser sessions also return an actionable unavailable message. No tool names were changed; `lookup_ioc` is new. Durable searches poll and read verified pages within the configured timeout, with a maximum of 1000 output rows. Timeout errors include the job ID for inspection in nano; they never represent zero matches.

@@ -29,18 +29,18 @@ Anchor on the primary entity (host/user) from the case, not just the matched eve
 
 ```
 # 1. Lead-up: did this behavior exist before the case? (baseline window, e.g. -14d to case start)
-source_type=windows_sysmon (src_host="<host>" OR user="<user>") action=process_create
-| table timestamp, src_host, user, process_name, command_line, parent_process_name
+metadata.log_source=windows_sysmon (device.hostname="<host>" OR actor.user.name="<user>") activity_name=process_create
+| table time, device.hostname, actor.user.name, process.file.name, process.cmd_line, process.parent_process.file.name
 
 # 2. Full local context around the case window (NOT just the matched events) — get the process tree
-source_type=windows_sysmon (src_host="<host>") 
-| table timestamp, action, process_name, command_line, parent_process_name, process_id, parent_process_id
+metadata.log_source=windows_sysmon (device.hostname="<host>")
+| table time, action, process.file.name, process.cmd_line, process.parent_process.file.name, process.pid, process.parent_process.pid
 # widen ±15min first; the loader and the cleanup live just outside the alerts
 
 # 3. Follow-up: is it still happening / has it spread? (case end → now)
-source_type=windows_sysmon (user="<user>") | stats count by src_host | sort -count
-source_type=windows_sysmon (user="<user>") action=process_create <suspicious-indicators>
-| table timestamp, src_host, process_name, command_line
+metadata.log_source=windows_sysmon (actor.user.name="<user>") | stats count by device.hostname | sort -count
+metadata.log_source=windows_sysmon (actor.user.name="<user>") activity_name=process_create <suspicious-indicators>
+| table time, device.hostname, process.file.name, process.cmd_line
 ```
 
 - Lead with a `timechart`/histogram or `stats count by` to see *bursts* across the wide window cheaply, then drill into the bursts. Don't pull raw rows across weeks.

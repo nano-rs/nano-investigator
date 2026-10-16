@@ -15,6 +15,8 @@ export const TOOLS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
+        limit: { type: 'integer', minimum: 1, maximum: 1000, description: 'Page size, default 100.' },
+        offset: { type: 'integer', minimum: 0, description: 'Page offset, default 0. Filters apply to this page.' },
         severity: {
           type: 'string',
           enum: ['critical', 'high', 'medium', 'low', 'informational'],
@@ -74,7 +76,10 @@ export async function handleDetectionsTool(
   try {
     switch (name) {
       case 'list_detections': {
-        const res = await client.listDetections();
+        const limit = (args.limit as number) ?? 100;
+        const offset = (args.offset as number) ?? 0;
+        if (!Number.isInteger(limit) || limit < 1 || limit > 1000 || !Number.isInteger(offset) || offset < 0) return err('Invalid detection page: limit must be 1–1000 and offset nonnegative.');
+        const res = await client.listDetections({ limit, offset });
         if (!res.success) return err(res.error?.message ?? 'Failed to list detections');
 
         let rules = res.data ?? [];
@@ -100,7 +105,7 @@ export async function handleDetectionsTool(
           mitre_techniques: r.mitre_techniques,
         }));
 
-        return ok(summary);
+        return ok({ rules: summary, limit, offset, may_have_more: (res.data?.length ?? 0) === limit, guidance: 'Severity/mode/enabled filters apply to this page. Page forward to examine more rules.' });
       }
 
       case 'get_detection': {

@@ -167,13 +167,14 @@ export const TOOL_PERMISSION_REQUIREMENTS: Record<
   // Risk
   get_risky_entities: allOf('risk:view'),
   get_risk_overview: allOf('risk:view'),
-  get_entity_risk_timeline: allOf('risk:view'),
+  get_entity_risk_timeline: allOf('risk:view', 'detections:view'),
   get_entity_risk_activity: allOf('risk:view'),
   reset_entity_risk: allOf('risk:clear'),
 
   // Enrichment
-  get_entity_context: allOf('risk:view'),
+  get_entity_context: allOf('risk:view', 'alerts:view', 'cases:view', 'detections:view'),
   lookup_ip: allOf('enrichments:view'),
+  lookup_ioc: allOf('enrichments:view'),
 
   // MITRE ATT&CK
   get_mitre_technique: allOf('mitre:view'),

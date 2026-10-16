@@ -30,7 +30,7 @@ export const TOOLS = [
     name: 'health_check',
     annotations: { readOnlyHint: true },
     description:
-      'Check SIEM health status including ClickHouse and PostgreSQL connectivity. Use this to verify the system is operational before running searches, or to diagnose why queries may be failing.',
+      'Check SIEM health status including backend connectivity. Use this to verify the system is operational before running searches, or to diagnose why queries may be failing.',
     inputSchema: {
       type: 'object' as const,
       properties: {},

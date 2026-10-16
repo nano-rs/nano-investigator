@@ -132,7 +132,7 @@ export async function handleAlertsTool(
         return parts.join(' | ');
       });
 
-      return text(`Found ${alerts.length} alert(s):\n\n${summary.join('\n')}`);
+      return text(`Returned ${alerts.length} alert(s) in this page:\n\n${summary.join('\n')}`);
     }
 
     // ------------------------------------------------------------------

@@ -49,7 +49,7 @@ Follow this investigation process:
    - Do any suspicious_when conditions apply? If so, lean toward true positive.
    - What additional context does the hints suggest gathering?
 
-4. **ENRICH** key entities — for each IP, user, or host in the matched events:
+4. **ENRICH** key entities — for each IP, actor.user.name, or host in the matched events:
    - Call get_entity_context to get risk score, alert history, and activity summary
    - For external IPs, call lookup_ip for GeoIP; for threat intel, check the ioc_matched / ioc_threat_type / ioc_confidence columns in search results (populated at ingest)
    - For hashes/domains, check prevalence with get_prevalence
@@ -57,7 +57,7 @@ Follow this investigation process:
 5. **SEARCH** for related activity — run 1-2 focused queries to expand context:
    - What else did the alerting entity do around the same time?
    - Are there similar patterns from other entities?
-   - Tool choice: prefer \`search\` (nPL) for piped \`| stats\` / \`| table\` patterns scoped to one host or entity. Reach for \`search_sql\` when you need cross-table joins (logs ↔ signals, ASOF identity), JSON \`ext.*\` column access, or aggregates against \`*_prevalence_summary\` (uniqMerge). Call \`get_schema\` first if you're unsure what columns exist.
+   - Tool choice: use search with OCSF field paths; use get_prevalence and get_entity_context for enrichment. Hosted tenants do not expose raw SQL.
 
 6. **CHECK HISTORY** — call get_related_cases to see if we've investigated this before:
    - If a related case exists, what was the disposition? Was it FP or TP?

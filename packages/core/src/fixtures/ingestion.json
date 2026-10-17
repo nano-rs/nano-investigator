@@ -1,0 +1,234 @@
+{
+  "/api/log-sources": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "name": "Gateway",
+      "source_type": "gateway",
+      "parser_vrl": ".",
+      "extension_enabled": false,
+      "has_draft_changes": true,
+      "active_version_number": 2,
+      "active_parser_vrl": ".old = true",
+      "enabled": true,
+      "deployed": true,
+      "lifecycle_status": "draft"
+    }
+  ],
+  "/api/log-sources/00000000-0000-4000-8000-000000000001/draft-status": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "name": "Gateway",
+    "source_type": "gateway",
+    "parser_vrl": ".",
+    "extension_enabled": false,
+    "has_draft_changes": true,
+    "active_version_number": 2,
+    "active_parser_vrl": ".old = true",
+    "enabled": true,
+    "deployed": true,
+    "lifecycle_status": "draft"
+  },
+  "/api/log-sources/00000000-0000-4000-8000-000000000001/pipe-inputs": {
+    "log_source_id": "00000000-0000-4000-8000-000000000001",
+    "source_slugs": [
+      "gateway"
+    ],
+    "push": [
+      {
+        "credential_id": "00000000-0000-4000-8000-000000000002",
+        "last_seen_at": null
+      }
+    ],
+    "pull": [
+      {
+        "id": "00000000-0000-4000-8000-000000000002",
+        "state": "pending_bundle",
+        "last_error": null
+      }
+    ],
+    "connectors": [],
+    "mixed_processes": true
+  },
+  "/api/log-sources/00000000-0000-4000-8000-000000000001/pipe-capabilities": {
+    "engine": "vector",
+    "preview_enabled": false,
+    "capture": {
+      "enabled": false,
+      "reason": "disabled"
+    },
+    "supported_step_kinds": [
+      "vrl",
+      "route"
+    ]
+  },
+  "/api/log-sources/00000000-0000-4000-8000-000000000001/versions": [
+    {
+      "version_number": 2,
+      "is_active": true
+    },
+    {
+      "version_number": 1,
+      "is_active": false
+    }
+  ],
+  "/api/log-sources/00000000-0000-4000-8000-000000000001/rollouts?limit=50": [
+    {
+      "state": "pending",
+      "terminal": false,
+      "applied_at": null
+    }
+  ],
+  "/api/log-sources/00000000-0000-4000-8000-000000000001/health": {
+    "health_status": "no_data",
+    "events_last_hour": 0,
+    "last_event_at": null
+  },
+  "/api/log-sources/pipe-inputs": {
+    "sources": [
+      {
+        "log_source_id": "00000000-0000-4000-8000-000000000001",
+        "source_slugs": [
+          "gateway"
+        ],
+        "push": 1,
+        "pull": 1,
+        "connectors": 0,
+        "attention": [
+          {
+            "level": "blocked",
+            "reason": "pending_bundle"
+          }
+        ]
+      }
+    ]
+  },
+  "/api/log-sources/ingest-endpoint": {
+    "endpoint_state": "ready",
+    "active_parser_bundle_revision": "bundle-2",
+    "hec_url": "https://ingest.example.test/hec"
+  },
+  "/api/log-sources/ingest-credentials": {
+    "credentials": [
+      {
+        "credential_id": "00000000-0000-4000-8000-000000000002",
+        "label": "Gateway HEC",
+        "state": "active",
+        "source_slugs": [
+          "gateway"
+        ]
+      }
+    ],
+    "requests": [
+      {
+        "state": "pending"
+      }
+    ]
+  },
+  "/api/log-sources/ingest-credentials/00000000-0000-4000-8000-000000000002/activity?hours=24": {
+    "first_event": {
+      "state": "received_at_edge",
+      "received_at_edge": "2026-10-17T11:00:00Z",
+      "searchable_at": null
+    },
+    "lake": {
+      "events": 0,
+      "parse_failures": 0
+    },
+    "redacted": true
+  },
+  "/api/pull-sources": [
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "provider": "gcp_pubsub",
+      "source_slug": "gateway",
+      "state": "pending_bundle",
+      "verified_at": "2026-10-17T11:00:00Z"
+    }
+  ],
+  "/api/marketplace/collectors": [
+    {
+      "slug": "okta",
+      "name": "Okta",
+      "streams": [
+        {
+          "source_type": "okta_system_log"
+        }
+      ]
+    }
+  ],
+  "/api/marketplace/collectors/okta": [
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "source_slug": "gateway",
+      "enabled": true,
+      "credential": "pending",
+      "rollout_state": "pending",
+      "last_status": "failed",
+      "last_success_at": null,
+      "last_error": "Collection failed"
+    }
+  ],
+  "/api/source-onboarding": {
+    "waves": [
+      {
+        "id": "wave-1",
+        "name": "First wave"
+      }
+    ],
+    "sources": [
+      {
+        "id": "plan-1",
+        "name": "Gateway",
+        "waveId": "wave-1",
+        "linkedLogSourceId": "00000000-0000-4000-8000-000000000001",
+        "completed": true,
+        "suggestion": null,
+        "progress": {
+          "issue": true,
+          "ready": false,
+          "parsingKnown": false,
+          "stage": "receiving"
+        },
+        "live": {
+          "signals": {
+            "eps": null,
+            "parseSuccessPct": null,
+            "status": "unknown"
+          }
+        }
+      }
+    ],
+    "settings": {
+      "completeGate": true
+    },
+    "liveSources": []
+  },
+  "/api/parser-repositories": {
+    "repositories": [
+      {
+        "id": "00000000-0000-4000-8000-000000000003",
+        "name": "nano-rs/parsers",
+        "branch": "main",
+        "last_sync_status": "syncing",
+        "last_sync_commit": null,
+        "parser_count": 12
+      }
+    ]
+  },
+  "/api/parser-repositories/00000000-0000-4000-8000-000000000003/sync/status": {
+    "status": "syncing",
+    "last_sync_error": null
+  },
+  "/api/parser-repositories/00000000-0000-4000-8000-000000000003/parsers?limit=50&offset=0": [
+    {
+      "file_path": "network/gateway.yaml",
+      "name": "Gateway",
+      "is_imported": true,
+      "linked_log_source_id": "00000000-0000-4000-8000-000000000001"
+    }
+  ],
+  "/api/parser-repositories/00000000-0000-4000-8000-000000000003/parsers/by-path/network%2Fgateway.yaml": {
+    "file_path": "network/gateway.yaml",
+    "parser_vrl": ".",
+    "version": "1.9"
+  }
+}

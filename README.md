@@ -72,9 +72,11 @@ Or add to your Claude Code settings (`~/.claude/settings.json`):
 | **Enrichment** | 2 | `get_entity_context` `lookup_ip` |
 | **MITRE ATT&CK** | 2 | `get_mitre_technique` `get_mitre_coverage` |
 | **System** | 4 | `get_source_types` `get_org_context` `health_check` `get_audit_trail` |
-| **Parsers** | 19 | `list_log_sources` `get_log_source` `validate_vrl` `test_parse_sample` `test_parse_live` `create_log_source` `update_log_source` `deploy_log_source` `undeploy_log_source` `get_log_source_health` `get_log_source_deployments` `list_source_config_types` `list_source_configs` `create_routing_rule` `check_rule_reachability` `list_parser_repositories` `sync_parser_repository` `list_repository_parsers` `import_parser` |
+| **Ingestion diagnostics** | 18 | `list_pipelines` `get_pipeline` `explain_pipeline` `list_log_sources` `get_log_source` `list_parser_repositories` `get_parser_repository_sync_status` `browse_parser_repository` `get_repository_parser` `list_data_sources` `get_connector_status` `get_onboarding_status` `get_add_data_guidance` `get_log_source_health` `get_pipeline_releases` `get_pipeline_inputs` `get_add_data_status` `get_ingest_credential_activity` |
 
-Parser tools let you build a log-source parser (Vector VRL) end to end from the MCP client — validate, test against a sample, save, deploy, and confirm events flow — without the web UI. Read the `build_parser` prompt and the `nanosiem://reference/vrl-parsers` resource to author VRL that passes nano's validator. (AI parser generation, `@detection`/`@tune`-style, stays in the Enterprise wizards; these tools are open-edition and AI-free.)
+Ingestion tools read the same pipeline, Add data, onboarding and synced parser repository state as nano Desktop. Use `get_pipeline_inputs` to map a feed label to a pipeline, `explain_pipeline` for routes/inputs/runtime capabilities, and `get_pipeline_releases` to distinguish a saved draft from an applied release. Push activity separates edge receipt from lake searchability; cloud pull verification and connector collection have independent status. Unknown telemetry is never healthy by default.
+
+Pipeline authoring uses `create_pipeline`, `update_pipeline_draft`, `preview_pipeline`, `review_pipeline_release`, `publish_pipeline_release` and `rollback_pipeline_release`, aligned with nanodac (NAN-4013). Draft updates require `expected_updated_at`; publish requires an unchanged reviewed `plan_revision` and explicit `user_confirmed` approval. These tools are marked WRITE and carry API permission requirements. Investigator no longer exposes the old ingress deploy, credential import, or parser publish shortcuts. Read-only tool names and schemas align with nanodac (NAN-4014); configure one ingestion tool provider per client to avoid duplicate names. Repository reads inspect the synced catalog, branch, sync status and import linkage; hosted catalogs may still be setting up. No connect-repository flow is required. See [the capability matrix](docs/ingestion-capability-matrix.md).
 
 ## Resources & Prompts
 
@@ -89,7 +91,7 @@ Parser tools let you build a log-source parser (Vector VRL) end to end from the 
 - `hunt_entity` -- Entity-focused threat hunt
 - `hunt_campaign` -- Proactive campaign hunting
 - `morning_briefing` -- SOC shift handoff
-- `build_parser` -- Guided log-source parser authoring (validate → test → save → deploy → confirm)
+- `build_parser` -- Inspect pipeline state and guide draft → preview → release → rollback with the aligned pipeline tools
 
 ## Project Structure
 
@@ -118,4 +120,4 @@ MIT
 
 For hosted tenants use `https://us.nano.rs/t/<tenant-slug>` as the API base URL. Keep the same tenant path in a separate search URL, if configured. The server validates that the API key belongs to that tenant. API keys use `X-API-Key`; the client sends a curl-compatible User-Agent. Redirects are refused so credentials cannot be forwarded to another host.
 
-Open-core deployments should set `NANOSIEM_DEPLOYMENT=open-core` so enterprise tools return an explicit unavailable message. Hosted case/notebook operations requiring browser sessions also return an actionable unavailable message. No tool names were changed; `lookup_ioc` is new. Durable searches poll and read verified pages within the configured timeout, with a maximum of 1000 output rows. Timeout errors include the job ID for inspection in nano; they never represent zero matches.
+Open-core deployments should set `NANOSIEM_DEPLOYMENT=open-core` so enterprise tools return an explicit unavailable message. Hosted case/notebook operations requiring browser sessions also return an actionable unavailable message. Ingestion tool migrations are listed in the capability matrix; other investigation tools retain their contracts. Durable searches poll and read verified pages within the configured timeout, with a maximum of 1000 output rows. Timeout errors include the job ID for inspection in nano; they never represent zero matches.

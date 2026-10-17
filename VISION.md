@@ -4,7 +4,7 @@ Interactive SOC operations through Claude Code. Ask questions in natural languag
 
 ## What This Is
 
-An MCP server that turns Claude Code (or any MCP client) into an interactive SOC analyst workstation. Unlike nanodac which focuses on detection-as-code workflows (write rules, validate, deploy via PR), nano-investigator is the **operations** side: searching logs, triaging alerts, investigating cases, hunting threats, and understanding your environment.
+An MCP server that turns Claude Code (or any MCP client) into an interactive SOC analyst workstation. Unlike nanodac which owns authoring workflows (detections and ingestion pipelines), nano-investigator is the **operations** side: searching logs, triaging alerts, investigating cases, hunting threats, and understanding your environment.
 
 ```
 You: "anything weird from the VPN subnet last night?"
@@ -66,7 +66,7 @@ nano-investigator/
 
 ## Relationship to nanodac
 
-**nanodac** = detection engineering (write, test, deploy rules via GitOps)
+**nanodac** = detection engineering and shared pipeline authoring (draft, preview, release, rollback)
 **nano-investigator** = SOC operations (search, triage, investigate, hunt)
 
 They share:

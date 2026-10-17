@@ -194,66 +194,31 @@ export const TOOL_PERMISSION_REQUIREMENTS: Record<
   health_check: permissionless,
   get_audit_trail: allOf('audit:view'),
 
-  // Parser authoring
+  // Ingestion lifecycle and diagnostics (aligned with nanodac).
+  create_pipeline: allOf('log_sources:create'),
+  update_pipeline_draft: allOf('log_sources:edit'),
+  preview_pipeline: allOf('log_sources:view'),
+  review_pipeline_release: allOf('log_sources:view'),
+  publish_pipeline_release: allOf('log_sources:view', 'log_sources:deploy'),
+  rollback_pipeline_release: allOf('log_sources:deploy'),
+  list_pipelines: allOf('log_sources:view'),
+  get_pipeline: allOf('log_sources:view'),
+  explain_pipeline: allOf('log_sources:view'),
   list_log_sources: allOf('log_sources:view'),
   get_log_source: allOf('log_sources:view'),
-  validate_vrl: allOf('log_sources:view'),
-  test_parse_sample: allOf('log_sources:view'),
-  test_parse_live: allOf('log_sources:view', 'search:execute'),
-  create_log_source: allOf('log_sources:create'),
-  update_log_source: allOf('log_sources:edit'),
-  // Publish creates a version and deploys it in one call; nanosiem-api gates
-  // it on the deploy scope alone (handlers/log_sources.rs publish_log_source),
-  // not on edit — the edit already happened when the working copy was saved.
-  publish_log_source: allOf('log_sources:deploy'),
-  deploy_log_source: allOf('log_sources:deploy'),
-  undeploy_log_source: allOf('log_sources:deploy'),
-  get_log_source_draft_status: allOf('log_sources:view'),
-  get_log_source_health: allOf('log_sources:view'),
-  get_log_source_deployments: allOf('log_sources:view'),
-  list_source_config_types: allOf('source_configs:view'),
-  list_source_configs: allOf('source_configs:view'),
-  create_routing_rule: allOf('source_configs:edit'),
-  check_rule_reachability: allOf('source_configs:view'),
-  deploy_source_config: alternatives(
-    {
-      allOf: ['source_configs:deploy'],
-      when: 'the saved source configuration has no credential',
-    },
-    {
-      allOf: ['source_configs:deploy', 'credentials:use'],
-      when: 'the saved source configuration references a credential',
-    },
-  ),
-  undeploy_source_config: allOf('source_configs:deploy'),
   list_parser_repositories: allOf('parser_repositories:view'),
-  sync_parser_repository: allOf('parser_repositories:sync'),
-  list_repository_parsers: allOf('parser_repositories:view'),
-  import_parser: alternatives(
-    {
-      allOf: ['parser_repositories:import', 'log_sources:create'],
-      when: 'importing a log or enrichment parser',
-    },
-    {
-      allOf: ['parser_repositories:import', 'source_configs:edit'],
-      when: 'importing an identity parser',
-    },
-  ),
-
-  // Guided onboarding
-  onboarding_requirements: permissionless,
-  import_credential_from_file: allOf('credentials:create'),
-  create_credential: allOf('credentials:create'),
-  create_source_config: alternatives(
-    {
-      allOf: ['source_configs:create'],
-      when: 'credential_id is omitted',
-    },
-    {
-      allOf: ['source_configs:create', 'credentials:use'],
-      when: 'credential_id is provided',
-    },
-  ),
+  get_parser_repository_sync_status: allOf('parser_repositories:view'),
+  browse_parser_repository: allOf('parser_repositories:view'),
+  get_repository_parser: allOf('parser_repositories:view'),
+  list_data_sources: allOf('log_sources:view'),
+  get_connector_status: allOf('enrichments:view', 'log_sources:view'),
+  get_onboarding_status: allOf('log_sources:view'),
+  get_add_data_guidance: allOf(),
+  get_log_source_health: allOf('log_sources:view'),
+  get_pipeline_releases: allOf('log_sources:view'),
+  get_pipeline_inputs: allOf('log_sources:view'),
+  get_add_data_status: allOf('log_sources:view'),
+  get_ingest_credential_activity: allOf('log_sources:view'),
 
   // Recon (NAN-2238)
   //

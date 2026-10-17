@@ -1,3 +1,4 @@
+import { INGESTION_TOOLS } from './tools/ingestion.js';
 import { describe, expect, it } from 'vitest';
 
 import { TOOLS as ALERTS_TOOLS } from './tools/alerts.js';
@@ -7,8 +8,6 @@ import { TOOLS as DETECTIONS_TOOLS } from './tools/detections.js';
 import { TOOLS as ENRICHMENT_TOOLS } from './tools/enrichment.js';
 import { TOOLS as MITRE_TOOLS } from './tools/mitre.js';
 import { TOOLS as NOTEBOOKS_TOOLS } from './tools/notebooks.js';
-import { TOOLS as ONBOARDING_TOOLS } from './tools/onboarding.js';
-import { TOOLS as PARSERS_TOOLS } from './tools/parsers.js';
 import { TOOLS as PREVALENCE_TOOLS } from './tools/prevalence.js';
 import { TOOLS as RECON_TOOLS } from './tools/recon.js';
 import { TOOLS as RISK_TOOLS } from './tools/risk.js';
@@ -32,8 +31,7 @@ const ALL_TOOLS = [
   ...ENRICHMENT_TOOLS,
   ...MITRE_TOOLS,
   ...SYSTEM_TOOLS,
-  ...PARSERS_TOOLS,
-  ...ONBOARDING_TOOLS,
+  ...INGESTION_TOOLS,
   ...RECON_TOOLS,
 ];
 

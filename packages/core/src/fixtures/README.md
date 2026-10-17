@@ -8,3 +8,5 @@ Source revision: nano-rs/nanosiem cc799503e (origin/main at audit), with routes 
 - closed: nanosiem-api/src/middleware/auth/enterprise_shared_auth.rs, shared_closed_route_response.
 
 operations.json covers the read contracts exercised through MCP tool handlers: alerts.rs Vec<Alert>, enterprise_shared_detection_dashboard.rs / enterprise_shared_detections.rs rule arrays, prevalence/types.rs PrevalenceResponse, enterprise_shared_enrichment_risk.rs EntityContextResponse, enterprise_shared_cases_notebooks.rs TenantCaseListResponse. Values are synthetic; no assertion relies on a live provider being configured or live data being present.
+
+`ingestion.json` models the desktop and nanodac ingestion GET contracts at nanosiem origin/main d579d0995265. Synthetic IDs only; includes unpublished drafts, pending rollouts, mixed inputs, onboarding regression and unknown telemetry. No tenant response data or credentials.

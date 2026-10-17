@@ -194,7 +194,13 @@ export const TOOL_PERMISSION_REQUIREMENTS: Record<
   health_check: permissionless,
   get_audit_trail: allOf('audit:view'),
 
-  // Ingestion diagnostics (aligned with nanodac; writes belong there).
+  // Ingestion lifecycle and diagnostics (aligned with nanodac).
+  create_pipeline: allOf('log_sources:create'),
+  update_pipeline_draft: allOf('log_sources:edit'),
+  preview_pipeline: allOf('log_sources:view'),
+  review_pipeline_release: allOf('log_sources:view'),
+  publish_pipeline_release: allOf('log_sources:view', 'log_sources:deploy'),
+  rollback_pipeline_release: allOf('log_sources:deploy'),
   list_pipelines: allOf('log_sources:view'),
   get_pipeline: allOf('log_sources:view'),
   explain_pipeline: allOf('log_sources:view'),

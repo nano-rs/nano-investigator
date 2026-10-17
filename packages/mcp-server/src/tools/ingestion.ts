@@ -1,6 +1,7 @@
+import { createHash, randomUUID } from "node:crypto";
 import type { ToolResult } from "./utils.js";
 import type { NanosiemClient } from "@nano-rs/investigator-core";
-// Read semantics and tool names aligned with nanodac ingestion.ts (8196fa2).
+// Read contracts align with nanodac 8196fa2; lifecycle schemas/implementation align with NAN-4013 (6c11421).
 /** Ingestion tools use fixed workspace API routes and the caller's scoped key. */
 type Properties = Record<string, Record<string, unknown>>;
 const id = {
@@ -16,6 +17,7 @@ function tool(
   properties: Properties,
   required: string[],
   permissions: string[],
+  write = false,
 ) {
   return {
     name,
@@ -27,9 +29,9 @@ function tool(
       additionalProperties: false,
     },
     annotations: {
-      readOnlyHint: true,
+      readOnlyHint: !write,
       destructiveHint: false,
-      idempotentHint: true,
+      idempotentHint: !write,
       openWorldHint: true,
     },
     _meta: {
@@ -37,11 +39,103 @@ function tool(
         version: 1,
         alternatives: [{ allOf: permissions }],
       },
-      "io.nano/access-tier": "read",
+      "io.nano/access-tier": write ? "write" : "read",
     },
   };
 }
 export const INGESTION_TOOLS = [
+  tool(
+    "create_pipeline",
+    "WRITE: create a draft pipeline source only; never publishes. Interview for source and transport first. Excluded from Desktop Locked auto-allow.",
+    {
+      name: { type: "string", minLength: 1, maxLength: 256 },
+      source_type: { type: "string", minLength: 1, maxLength: 256 },
+      description: { type: "string", maxLength: 4096 },
+      parser_vrl: { type: "string", maxLength: 262144 },
+    },
+    ["name", "source_type", "parser_vrl"],
+    ["log_sources:create"],
+    true,
+  ),
+  tool(
+    "update_pipeline_draft",
+    "WRITE: save complete draft processing (v2 steps, including route conditions and input identities) as parser_vrl, exactly as the Pipelines editor does. Requires the last read updated_at; conflicts require reload. Does not publish. Excluded from Desktop Locked auto-allow.",
+    {
+      source_id: id,
+      expected_updated_at: { type: "string" },
+      parser_vrl: { type: "string", maxLength: 262144 },
+      steps: {
+        type: "array",
+        minItems: 1,
+        maxItems: 50,
+        description:
+          "Complete v2 step objects: id, name, kind, enabled, config, optional condition; route config contains input identities. Alternative to parser_vrl.",
+        items: { type: "object" },
+      },
+      draft_revision: { type: "integer", minimum: 1 },
+      name: { type: "string", minLength: 1, maxLength: 256 },
+      description: { type: "string", maxLength: 4096 },
+    },
+    ["source_id", "expected_updated_at"],
+    ["log_sources:edit"],
+    true,
+  ),
+  tool(
+    "preview_pipeline",
+    "WRITE: execute saved draft processing against supplied ephemeral samples in the sandbox. No capture or persistence. Excludes normalization and sinks. Excluded from Desktop Locked auto-allow.",
+    {
+      source_id: id,
+      expected_updated_at: { type: "string" },
+      events: {
+        type: "array",
+        minItems: 1,
+        maxItems: 100,
+        items: { type: "object" },
+      },
+      event_inputs: {
+        type: "array",
+        maxItems: 100,
+        items: { type: ["string", "null"] },
+      },
+    },
+    ["source_id", "expected_updated_at", "events"],
+    ["log_sources:view"],
+    true,
+  ),
+  tool(
+    "review_pipeline_release",
+    "WRITE: validate saved parser and extension and return a release plan revision bound to this workspace and exact draft. Show the plan and ASK the user before publish. Review does not publish. Excluded from Desktop Locked auto-allow.",
+    { source_id: id, expected_updated_at: { type: "string" } },
+    ["source_id", "expected_updated_at"],
+    ["log_sources:view"],
+    true,
+  ),
+  tool(
+    "publish_pipeline_release",
+    "WRITE: publish ONLY after explicit user approval of the reviewed plan revision. Requires a live review from this server session and unchanged draft. API enforces deploy RBAC/admin authority. Accepted rollout is not live. Excluded from Desktop Locked auto-allow.",
+    {
+      source_id: id,
+      plan_revision: { type: "string" },
+      user_confirmed: { type: "boolean", const: true },
+    },
+    ["source_id", "plan_revision", "user_confirmed"],
+    ["log_sources:view", "log_sources:deploy"],
+    true,
+  ),
+  tool(
+    "rollback_pipeline_release",
+    "WRITE: restore and deploy an earlier version row, replacing the saved draft. ASK the user before rollback. API enforces deploy RBAC/admin authority. Excluded from Desktop Locked auto-allow.",
+    {
+      source_id: id,
+      version_id: { type: "integer", minimum: 1 },
+      user_confirmed: { type: "boolean", const: true },
+    },
+    ["source_id", "version_id", "user_confirmed"],
+    ["log_sources:deploy"],
+    true,
+  ),
+
+
   tool(
     "list_pipelines",
     "Read ingestion pipelines (log-source lanes): source labels, draft/deployed state and parser metadata. Logs normalize to OCSF 1.9. Listing does not publish or execute processing.",
@@ -354,7 +448,7 @@ function guidance(method: string) {
       "For push, issue a scoped credential in Desktop. Copy its one-time reveal directly to the sender; never paste it into an agent prompt.",
       "For pulls, grant the returned narrow cloud permissions and wait for verification, parser bundle and active delivery. New sources are point-forward.",
       "Review processing and frozen preview samples in Pipelines. Preview excludes platform normalization and sinks. Captured samples persist only with explicit consent.",
-      "Publish only on an explicit user request. Observe rollout status; accepted or pending is not live.",
+      "Use create_pipeline/update_pipeline_draft, preview_pipeline and review_pipeline_release. Show the plan and obtain explicit approval of its plan_revision before publish_pipeline_release; re-review any changed draft. Observe rollout status; accepted or pending is not live.",
       "Check first-event received vs searchable state and onboarding telemetry; unknown parsing/stability remains unknown.",
     ],
     fields: [
@@ -368,23 +462,61 @@ function guidance(method: string) {
   };
 }
 
+// Reviews are short-lived capabilities, never reconstructed from agent-supplied JSON.
+const reviews = new Map<
+  string,
+  {
+    workspace: string;
+    source: string;
+    revision: string;
+    fingerprint: string;
+    expires: number;
+  }
+>();
+const fingerprint = (draft: Record<string, unknown>) =>
+  createHash("sha256")
+    .update(
+      JSON.stringify([
+        draft.updated_at,
+        draft.parser_vrl,
+        draft.extension_vrl ?? null,
+        draft.extension_enabled !== false,
+      ]),
+    )
+    .digest("hex");
+
 export async function handleIngestionTool(
   name: string,
   args: Record<string, unknown>,
   client: NanosiemClient,
 ): Promise<ToolResult> {
-  const request = async (path: string): Promise<unknown> => {
-    const result = await client.readIngestion(path);
+  const workspace = () => client.ingestionWorkspaceIdentity();
+  async function savedDraft(source: string, expected?: unknown) {
+  const draft = object(
+    await request(`/api/log-sources/${source}/draft-status`),
+  );
+  if (
+    typeof draft.updated_at !== "string" ||
+    typeof draft.parser_vrl !== "string"
+  )
+    throw new Error("Incomplete saved draft");
+  if (expected !== undefined && draft.updated_at !== expected)
+    throw new Error("Stale draft");
+  return draft;
+}
+
+  const request = async (path: string, method: "GET" | "POST" | "PUT" = "GET", body?: unknown): Promise<unknown> => {
+    const result = method === "GET" ? await client.readIngestion(path) : await client.writeIngestion(path, method, body);
     if (!result.success) throw new Error(result.error?.code ?? "Unavailable");
     const data = result.data;
-    const arrayResponse = path === '/api/log-sources' || path === '/api/pull-sources'
+    const arrayResponse = method === 'GET' && (path === '/api/log-sources' || path === '/api/pull-sources'
       || path.startsWith('/api/marketplace/collectors')
       || /\/(versions|rollouts)(?:\?|$)/.test(path)
-      || /\/parsers\?/.test(path);
+      || /\/parsers\?/.test(path));
     if (arrayResponse ? !Array.isArray(data) : !data || typeof data !== 'object' || Array.isArray(data)) {
       throw new Error('Invalid ingestion response');
     }
-    const requiredKey = path === '/api/source-onboarding' ? 'sources'
+    const requiredKey = method !== 'GET' ? undefined : path === '/api/source-onboarding' ? 'sources'
       : path === '/api/parser-repositories' ? 'repositories'
       : path === '/api/log-sources/pipe-inputs' ? 'sources'
       : path === '/api/log-sources/ingest-credentials' ? 'credentials' : undefined;
@@ -449,6 +581,106 @@ export async function handleIngestionTool(
       (typeof args[key] !== "string" || String(args[key]).length > 256)
     )
       return failure(`${key} must be at most 256 characters`);
+  for (const key of [
+    "name",
+    "description",
+    "parser_vrl",
+    "expected_updated_at",
+    "plan_revision",
+  ])
+    if (
+      key in args &&
+      (typeof args[key] !== "string" ||
+        !String(args[key]).length ||
+        Buffer.byteLength(String(args[key])) >
+          (key === "parser_vrl" ? 262144 : key === "description" ? 4096 : 256))
+    )
+      return failure(`Invalid ${key}`);
+  if (
+    "expected_updated_at" in args &&
+    !/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(
+      String(args.expected_updated_at),
+    )
+  )
+    return failure("Invalid draft revision timestamp");
+  if (
+    ["publish_pipeline_release", "rollback_pipeline_release"].includes(name) &&
+    args.user_confirmed !== true
+  )
+    return failure("Explicit user confirmation is required");
+  if (
+    name === "rollback_pipeline_release" &&
+    (!Number.isSafeInteger(args.version_id) ||
+      Number(args.version_id) < 1 ||
+      Number(args.version_id) > 2147483647)
+  )
+    return failure("Invalid version row ID");
+  if (name === "preview_pipeline") {
+    if (
+      !Array.isArray(args.events) ||
+      args.events.length < 1 ||
+      args.events.length > 100 ||
+      args.events.some(
+        (event) =>
+          !event ||
+          typeof event !== "object" ||
+          Array.isArray(event) ||
+          Buffer.byteLength(JSON.stringify(event)) > 65536,
+      )
+    )
+      return failure("Provide 1–100 object samples, each at most 64 KiB");
+    if (
+      args.event_inputs !== undefined &&
+      (!Array.isArray(args.event_inputs) ||
+        args.event_inputs.length !== args.events.length ||
+        args.event_inputs.some(
+          (input) =>
+            input !== null &&
+            (typeof input !== "string" ||
+              !/^(push|pull):[a-z0-9_-]{1,128}$/.test(input)),
+        ))
+    )
+      return failure("Invalid sample input identities");
+  }
+  if (name === "update_pipeline_draft") {
+    if ((args.parser_vrl !== undefined) === (args.steps !== undefined))
+      return failure("Provide exactly one of parser_vrl or steps");
+    if (args.steps !== undefined) {
+      if (
+        !Array.isArray(args.steps) ||
+        !args.steps.length ||
+        args.steps.length > 50 ||
+        !Number.isSafeInteger(args.draft_revision) ||
+        Number(args.draft_revision) < 1
+      )
+        return failure(
+          "Structured steps require a positive draft_revision and 1–50 steps",
+        );
+      const ids = new Set();
+      for (const value of args.steps) {
+        const step = object(value);
+        if (
+          typeof step.id !== "string" ||
+          !step.id.length ||
+          ids.has(step.id) ||
+          typeof step.name !== "string" ||
+          typeof step.kind !== "string" ||
+          typeof step.enabled !== "boolean" ||
+          !step.config ||
+          typeof step.config !== "object" ||
+          Array.isArray(step.config)
+        )
+          return failure("Invalid or duplicate pipeline step");
+        ids.add(step.id);
+      }
+      args = {
+        ...args,
+        parser_vrl: `# nano-pipe-v2 ${JSON.stringify({ version: 2, revision: args.draft_revision, steps: args.steps })}\n# Processing plan compiled by Nano at publication.\nnano_pipe_plan_v2()`,
+      };
+      if (Buffer.byteLength(String(args.parser_vrl)) > 262144)
+        return failure("Draft exceeds 256 KiB");
+    }
+  }
   const method = args.method ?? "auto";
   if (
     typeof method !== "string" ||
@@ -495,6 +727,125 @@ export async function handleIngestionTool(
       }
       case "get_ingest_credential_activity":
         return success(await request(`/api/log-sources/ingest-credentials/${encodeURIComponent(String(args.credential_id))}/activity?hours=24`));
+      case "create_pipeline":
+        return success(
+          await request("/api/log-sources", "POST", {
+            ...pick(args, ["name", "description", "source_type", "parser_vrl"]),
+            lifecycle_status: "draft",
+          }),
+        );
+      case "update_pipeline_draft":
+        return success(
+          await request(
+            `/api/log-sources/${source}`,
+            "PUT",
+            pick(args, [
+              "name",
+              "description",
+              "parser_vrl",
+              "expected_updated_at",
+            ]),
+          ),
+        );
+      case "preview_pipeline": {
+        const draft = await savedDraft(source, args.expected_updated_at);
+        const body = {
+          draft_revision: draft.updated_at,
+          steps: [
+            {
+              id: "saved-draft",
+              name: "Complete saved draft",
+              enabled: true,
+              vrl: draft.parser_vrl,
+            },
+          ],
+          events: args.events,
+          ...(draft.extension_enabled !== false && draft.extension_vrl
+            ? { extension_vrl: draft.extension_vrl }
+            : {}),
+          ...(args.event_inputs ? { event_inputs: args.event_inputs } : {}),
+        };
+        if (Buffer.byteLength(JSON.stringify(body)) >= 1048576)
+          return failure("Preview request exceeds 1 MiB");
+        return success(
+          await request(
+            `/api/log-sources/${source}/pipe-preview`,
+            "POST",
+            body,
+          ),
+        );
+      }
+      case "review_pipeline_release": {
+        const draft = await savedDraft(source, args.expected_updated_at);
+        for (const vrl of [
+          draft.parser_vrl,
+          ...(draft.extension_enabled !== false && draft.extension_vrl
+            ? [draft.extension_vrl]
+            : []),
+        ]) {
+          const result = object(
+            await request("/api/log-sources/validate-vrl", "POST", { vrl_code: vrl }),
+          );
+          if (result.valid !== true)
+            return failure(
+              "Saved processing failed validation. Correct the draft and review again.",
+            );
+        }
+        const current = await savedDraft(source, draft.updated_at);
+        if (fingerprint(current) !== fingerprint(draft))
+          return failure("Draft changed during review");
+        for (const [key, review] of reviews)
+          if (review.expires < Date.now()) reviews.delete(key);
+        if (reviews.size >= 100) reviews.delete(reviews.keys().next().value!);
+        const revision = randomUUID();
+        reviews.set(revision, {
+          workspace: workspace(),
+          source,
+          revision: String(draft.updated_at),
+          fingerprint: fingerprint(draft),
+          expires: Date.now() + 15 * 60 * 1000,
+        });
+        return success({
+          plan_revision: revision,
+          source_id: args.source_id,
+          expected_updated_at: draft.updated_at,
+          parser_vrl: draft.parser_vrl,
+          extension_vrl: draft.extension_vrl,
+          extension_enabled: draft.extension_enabled,
+          active_version_number: draft.active_version_number,
+          next: "Show this plan and ASK the user before publishing this exact revision. Changes require a new review. Saved source samples carry over; preview samples are never persisted. Publication still requires bundle validation and rollout; acceptance is not live.",
+        });
+      }
+      case "publish_pipeline_release": {
+        const review = reviews.get(String(args.plan_revision));
+        if (
+          !review ||
+          review.source !== source ||
+          review.workspace !== workspace() ||
+          review.expires < Date.now()
+        )
+          return failure(
+            "Review this workspace draft in this server session before publishing",
+          );
+        const draft = await savedDraft(source, review.revision);
+        if (fingerprint(draft) !== review.fingerprint)
+          return failure("Reviewed draft changed; review again");
+        // Consume before POST: an uncertain transport result must never be retried blindly.
+        reviews.delete(String(args.plan_revision));
+        return success(
+          await request(`/api/log-sources/${source}/publish`, "POST", {
+            expected_updated_at: review.revision,
+          }),
+        );
+      }
+      case "rollback_pipeline_release":
+        return success(
+          await request(
+            `/api/log-sources/${source}/versions/${args.version_id}/revert`,
+            "POST",
+          ),
+        );
+
       case "list_pipelines":
       case "list_log_sources": {
         const all = rows(await request("/api/log-sources"));

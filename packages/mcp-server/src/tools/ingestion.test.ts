@@ -71,9 +71,9 @@ describe('ingestion diagnostic contracts', () => {
     expect(body(await call('get_repository_parser', { repository_id, path: 'network/gateway.yaml' })).parser_vrl).toBe('.');
   });
 
-  it('uses scoped, cache-busted GETs only, and exposes no ingestion writes', async () => {
+  it('uses scoped, cache-busted GETs for diagnostics', async () => {
     const fetch = mock();
-    for (const definition of INGESTION_TOOLS) {
+    for (const definition of INGESTION_TOOLS.filter((tool) => tool.annotations.readOnlyHint)) {
       const result = await call(definition.name, definition.name === 'get_add_data_guidance' ? { inspect_workspace: true } :
         Object.fromEntries(definition.inputSchema.required.map((key) => [key, ({ source_id, credential_id, repository_id, connector: 'okta', path: 'network/gateway.yaml' } as Record<string, string>)[key]])));
       expect(result.isError, definition.name).not.toBe(true);

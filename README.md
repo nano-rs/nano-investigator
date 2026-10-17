@@ -76,7 +76,7 @@ Or add to your Claude Code settings (`~/.claude/settings.json`):
 
 Ingestion tools read the same pipeline, Add data, onboarding and synced parser repository state as nano Desktop. Use `get_pipeline_inputs` to map a feed label to a pipeline, `explain_pipeline` for routes/inputs/runtime capabilities, and `get_pipeline_releases` to distinguish a saved draft from an applied release. Push activity separates edge receipt from lake searchability; cloud pull verification and connector collection have independent status. Unknown telemetry is never healthy by default.
 
-Pipeline authoring, preview, release and rollback use nano Desktop or the shared nanodac tools (NAN-4013). Investigator no longer exposes the old ingress deploy, credential import, or parser publish shortcuts. Read-only tool names and schemas align with nanodac (NAN-4014); configure one ingestion tool provider per client to avoid duplicate names. Repository reads inspect the synced catalog, branch, sync status and import linkage; hosted catalogs may still be setting up. No connect-repository flow is required. See [the capability matrix](docs/ingestion-capability-matrix.md).
+Pipeline authoring uses `create_pipeline`, `update_pipeline_draft`, `preview_pipeline`, `review_pipeline_release`, `publish_pipeline_release` and `rollback_pipeline_release`, aligned with nanodac (NAN-4013). Draft updates require `expected_updated_at`; publish requires an unchanged reviewed `plan_revision` and explicit `user_confirmed` approval. These tools are marked WRITE and carry API permission requirements. Investigator no longer exposes the old ingress deploy, credential import, or parser publish shortcuts. Read-only tool names and schemas align with nanodac (NAN-4014); configure one ingestion tool provider per client to avoid duplicate names. Repository reads inspect the synced catalog, branch, sync status and import linkage; hosted catalogs may still be setting up. No connect-repository flow is required. See [the capability matrix](docs/ingestion-capability-matrix.md).
 
 ## Resources & Prompts
 
@@ -91,7 +91,7 @@ Pipeline authoring, preview, release and rollback use nano Desktop or the shared
 - `hunt_entity` -- Entity-focused threat hunt
 - `hunt_campaign` -- Proactive campaign hunting
 - `morning_briefing` -- SOC shift handoff
-- `build_parser` -- Inspect pipeline state and guide draft → preview → release → rollback through Desktop or nanodac
+- `build_parser` -- Inspect pipeline state and guide draft → preview → release → rollback with the aligned pipeline tools
 
 ## Project Structure
 

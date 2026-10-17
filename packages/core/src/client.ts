@@ -293,6 +293,28 @@ export class NanosiemClient {
     }
   }
 
+  /** Fixed, read-only ingestion routes shared with desktop and nanodac. */
+  async readIngestion(path: string): Promise<ApiResponse<unknown>> {
+    const segment = '(?:[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}|(?:[a-z_]{1,63}_)?[0-7][0-9a-hjkmnp-tv-z]{25})';
+    const catalogPath = '[a-zA-Z0-9_%.-]+';
+    const allowed = [
+      /^\/api\/log-sources$/,
+      /^\/api\/log-sources\/(pipe-inputs|ingest-endpoint|ingest-credentials)$/,
+      new RegExp(`^/api/log-sources/${segment}/(draft-status|versions|health|pipe-inputs|pipe-capabilities|rollouts\\?limit=50)$`),
+      new RegExp(`^/api/log-sources/ingest-credentials/${segment}/activity\\?hours=24$`),
+      /^\/api\/(pull-sources|source-onboarding)$/,
+      /^\/api\/marketplace\/collectors(?:\/[a-z0-9_-]{1,128})?$/,
+      /^\/api\/parser-repositories$/,
+      new RegExp(`^/api/parser-repositories/${segment}/sync/status$`),
+      new RegExp(`^/api/parser-repositories/${segment}/parsers(?:\\?limit=\\d+&offset=\\d+(?:&search=[^#]*)?|/by-path/${catalogPath})$`),
+    ];
+    if (path.includes('..') || !allowed.some((pattern) => pattern.test(path))) {
+      return { success: false, error: { code: 'INVALID_ROUTE', message: 'Unsupported ingestion read route.' } };
+    }
+    // Cache-bust GETs because the local conduit can cache across API keys.
+    return this.request('GET', path + (path.includes('?') ? '&' : '?') + '_=' + Date.now());
+  }
+
   // ==================== Search (→ search service) ====================
 
   private checkedSearchResult(data: SearchResponse, limit: number): ApiResponse<SearchResponse> {

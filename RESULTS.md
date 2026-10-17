@@ -1,5 +1,7 @@
 # NAN-3944 lake tools
 
+Historical NAN-3944 audit. Its ingestion rows describe the earlier tool surface and are superseded by the [NAN-4015 ingestion matrix](docs/ingestion-capability-matrix.md), including removed authoring tools and renamed read arguments.
+
 Contract references: nanosiem origin/main cc799503e (main.rs → routes.rs → enterprise_shared_auth.rs and tenant adapter fences), open core tag v1.0.6. No live tenant requests made. “Mounted” means HTTP 200 is expected from the static route contract with the required permission/entitlement; it records static route availability, not proof of a successful live operation. Permissions, entitlements and configured providers still apply.
 
 | tool | endpoint | hosted | open core | problem | fix |

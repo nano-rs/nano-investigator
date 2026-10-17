@@ -57,7 +57,7 @@ clients should use the tool metadata as the authoritative contract.
 |------------|-----------------|
 | `search:view` | Read saved searches and the active OCSF schema |
 | `search:execute` | Execute and explain nPL, field stats, extended-schema discovery |
-| `log_sources:view` | Inspect log sources and use the parser validation tools |
+| `log_sources:view` | Read pipeline state, inputs, releases, Add data and onboarding status |
 | `lookup:view` | Execute nPL searches that use the `lookup` command |
 | `detections:view` | View detection rules, matches, stats |
 | `alerts:view` | List and view alerts |
@@ -68,8 +68,7 @@ clients should use the tool metadata as the authoritative contract.
 | `risk:view` | Risk scores, entity context, activity, and overview |
 | `mitre:view` | ATT&CK data and technique details |
 | `dashboards:view` | Read dashboards and run nPL dashboard panels |
-| `source_configs:view` | Inspect ingress transports and routing |
-| `parser_repositories:view` | Browse the prebuilt-parser catalogue |
+| `parser_repositories:view` | Browse the prebuilt parser catalog |
 
 Raw SQL is not part of the baseline. nPL is the primary search surface and works
 with `search:execute`. Grant `search:sql` only for queries nPL cannot express,
@@ -95,25 +94,11 @@ granting the scope does not bypass source isolation.
 | `dashboards:create` | Create dashboards |
 | `dashboards:edit` | Update dashboards |
 
-### Optional — log source & parser management
+### Ingestion diagnostics and authoring
 
-Add these only if you want the assistant to author, route, and deploy ingestion.
-They control what nano ingests and how it is parsed.
+Investigator ingestion tools are read-only. `log_sources:view` reads pipelines, push status, cloud pulls and source onboarding. `parser_repositories:view` reads synced parser catalogs; `enrichments:view` also enables the hosted connector catalog, and connector feed status requires both `enrichments:view` and `log_sources:view`. Optional subreads report unavailable when the caller lacks authority.
 
-| Permission | What it enables |
-|------------|-----------------|
-| `log_sources:create` | Save new parsers as drafts |
-| `log_sources:edit` | Update existing parsers |
-| `log_sources:deploy` | Deploy or undeploy parsers |
-| `source_configs:view` | Inspect transports and check rule reachability |
-| `source_configs:create` | Create an ingress transport |
-| `source_configs:edit` | Create and edit routing rules |
-| `source_configs:deploy` | Deploy or undeploy an ingress transport |
-| `credentials:create` | Store a new transport credential |
-| `credentials:use` | Attach a stored credential to a transport and deploy it |
-| `parser_repositories:view` | Browse parser repositories |
-| `parser_repositories:sync` | Refresh a parser repository |
-| `parser_repositories:import` | Import a prebuilt parser as a draft |
+Use nano Desktop or nanodac for draft edits, preview, release, rollback, repository sync/import and delivery setup. Their tool metadata describes the required write permissions. Investigator does not need transport or credential write scopes for diagnosis.
 
 ### Optional — sensitive context
 
@@ -228,11 +213,10 @@ The full tool catalog, grouped by category:
 ### System (4)
 `get_source_types` `get_org_context` `health_check` `get_audit_trail`
 
-### Parser authoring & ingestion (21)
-`list_log_sources` `get_log_source` `validate_vrl` `test_parse_sample` `test_parse_live` `create_log_source` `update_log_source` `deploy_log_source` `undeploy_log_source` `get_log_source_health` `get_log_source_deployments` `list_source_config_types` `list_source_configs` `create_routing_rule` `check_rule_reachability` `deploy_source_config` `undeploy_source_config` `list_parser_repositories` `sync_parser_repository` `list_repository_parsers` `import_parser`
+### Ingestion diagnostics (18)
+`list_pipelines` `get_pipeline` `explain_pipeline` `list_log_sources` `get_log_source` `list_parser_repositories` `get_parser_repository_sync_status` `browse_parser_repository` `get_repository_parser` `list_data_sources` `get_connector_status` `get_onboarding_status` `get_add_data_guidance` `get_log_source_health` `get_pipeline_releases` `get_pipeline_inputs` `get_add_data_status` `get_ingest_credential_activity`
 
-### Guided onboarding (4)
-`onboarding_requirements` `import_credential_from_file` `create_credential` `create_source_config`
+Read pipeline drafts, release rollouts, input bindings, Add data delivery, onboarding plans and synced parser repositories. Use nano Desktop or nanodac for authoring, preview, release and rollback. Never paste credentials into chat. See [the capability matrix](docs/ingestion-capability-matrix.md).
 
 ## Resources & prompts
 

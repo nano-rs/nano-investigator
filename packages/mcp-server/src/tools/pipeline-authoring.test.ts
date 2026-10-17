@@ -110,7 +110,7 @@ describe("pipeline authoring", () => {
         name: "Route",
         kind: "route",
         enabled: true,
-        config: { inputs: [`push:${source}`] },
+        config: { mode: "first", fallback: "keep", routes: [{ label: "Push", inputs: [`push:${source}`] }] },
       },
     ];
     await call("update_pipeline_draft", {

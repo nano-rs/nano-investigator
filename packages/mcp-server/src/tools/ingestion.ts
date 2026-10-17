@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { ToolResult } from "./utils.js";
 import type { NanosiemClient } from "@nano-rs/investigator-core";
-// Read contracts align with nanodac 8196fa2; lifecycle schemas/implementation align with NAN-4013 (6c11421).
+// Read contracts align with nanodac 8196fa2; lifecycle schemas/implementation align with NAN-4013 (7a74377).
 /** Ingestion tools use fixed workspace API routes and the caller's scoped key. */
 type Properties = Record<string, Record<string, unknown>>;
 const id = {
@@ -69,7 +69,7 @@ export const INGESTION_TOOLS = [
         minItems: 1,
         maxItems: 50,
         description:
-          "Complete v2 step objects: id, name, kind, enabled, config, optional condition; route config contains input identities. Alternative to parser_vrl.",
+          "Complete v2 step objects: id, name, kind, enabled, config, optional condition; route config.routes contains branches with label, inputs (push:<credential ID>/pull:<source ID>) and/or predicate, optional drop; config.mode is first/fanout and fallback is keep/drop. Alternative to parser_vrl.",
         items: { type: "object" },
       },
       draft_revision: { type: "integer", minimum: 1 },

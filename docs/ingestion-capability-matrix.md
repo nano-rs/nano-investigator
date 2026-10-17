@@ -1,6 +1,6 @@
 # NAN-4015 ingestion capability matrix
 
-Scope: ingestion only. OCSF/lean search were explicitly excluded from the new audit. Before: investigator main `fc55282`. API/product evidence: nanosiem `origin/main` at `d579d099526523ddd4f21ce06921780f6e2e8638`. Read tool naming, schemas, bounded inventories, stage explanations and guidance align with nanodac `origin/main` ingestion tools at `8196fa2`; pipeline authoring names, schemas and lifecycle implementation align with NAN-4013 nanodac worktree `mcppipes` at `6c11421`.
+Scope: ingestion only. OCSF/lean search were explicitly excluded from the new audit. Before: investigator main `fc55282`. API/product evidence: nanosiem `origin/main` at `d579d099526523ddd4f21ce06921780f6e2e8638`. Read tool naming, schemas, bounded inventories, stage explanations and guidance align with nanodac `origin/main` ingestion tools at `8196fa2`; pipeline authoring names, schemas and lifecycle implementation align with NAN-4013 nanodac worktree `mcppipes` at `7a74377`.
 
 Diagnostic ingestion tools use cache-busted GET requests; six explicitly marked WRITE tools use fixed POST/PUT lifecycle routes. All use the configured workspace URL and scoped X-API-Key, no redirects, and cache-busting for diagnostic reads through the local conduit. No arbitrary URL, tenant override, capture creation or token reveal is exposed.
 

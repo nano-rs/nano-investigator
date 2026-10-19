@@ -43,7 +43,7 @@ metadata.log_source=windows_sysmon (actor.user.name="<user>") activity_name=proc
 | table time, device.hostname, process.file.name, process.cmd_line
 ```
 
-- Lead with a `timechart`/histogram or `stats count by` to see *bursts* across the wide window cheaply, then drill into the bursts. Don't pull raw rows across weeks.
+- Lead with a `timechart`/histogram or `stats count by` to see *bursts* across the wide window cheaply, then drill into the bursts. Keep the entity or source scope on it; a bare `* | timechart` over weeks reads every source (and over 4h runs as a background job). Don't pull raw rows across weeks.
 - Pull the **parent/child process tree** around key events — the alert shows you the matched process, not what spawned it or what it spawned next.
 - When you find activity on a new host/user in the forward sweep, that host/user becomes a new entity to scope (recurse, but check in with the analyst per the depth rules in CLAUDE.md).
 

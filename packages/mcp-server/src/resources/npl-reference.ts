@@ -21,6 +21,8 @@ search_term | command1 | command2 | ...
 
 Queries flow left to right through a pipeline. Start with a search term, then pipe through commands.
 
+**Scope first.** The search term should name a source (\`metadata.log_source=<source>\`), a class (\`class_uid=<n>\`), an entity (host, user, IP, hash) or a keyword. Do not start with a bare \`*\` unless it is truly required — see Query Optimization Notes.
+
 ## Search Terms
 
 ### Free text
@@ -187,6 +189,17 @@ Accumulates risk on the specified entity field. Multiple risk commands stack.
 - \`case(cond1, val1, cond2, val2, ..., default)\`
 
 ## Query Optimization Notes
+
+### Scope first — never a bare \`*\` hunt
+A bare \`*\` search (no keyword, no source/class scope, no entity term) reads every source in the window and slows every other query on the deployment. Start every query with one of:
+- a source: \`metadata.log_source=okta | stats count by actor.user.name\` (names from \`get_source_types\`)
+- a class: \`class_uid=3002 | stats count by actor.user.name\`
+- an entity: \`device.hostname="ws-01" | stats count by process.file.name\`, \`actor.user.name=\`, \`src_endpoint.ip=\`, \`file.hashes.value=\`
+- a keyword: \`mimikatz | table time, device.hostname, process.cmd_line\`
+
+A leading \`| where\` on a source, class or entity field counts as scoped (\`* | where metadata.log_source=okta | stats count\`); a \`where\` after \`eval\` or on any other field does not.
+
+When \`*\` is truly needed, keep the window to 4h or less. On lean, nano runs a bare \`*\` over more than 4h with stats/eval/where/timechart as a background job, and the MCP \`search\` tool refuses it with a scoped rewrite. Plain listing (\`*\`, \`* | head 20\`) still runs but should be scoped when possible. \`get_field_values\` over more than 4h needs a scoping \`query\`.
 
 ### Always filter by timestamp
 nPL does this automatically from the time range you provide. For best performance, use the narrowest time range that answers your question.

@@ -55,7 +55,7 @@ Gather data in parallel where possible, then present a concise briefing.
 
 ## 5. ENVIRONMENT HEALTH
 - Call health_check — are the API and lake search services healthy?
-- Any log source gaps or ingestion issues?
+- Any log source gaps or ingestion issues? Use get_source_types and health_check; do not run a bare \`* | stats count by metadata.log_source\` over long windows (keep any such check to 4h or less).
 
 ## Present as a Concise Briefing
 

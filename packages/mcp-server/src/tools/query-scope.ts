@@ -75,27 +75,68 @@ function isMatchAll(searchStage: string): boolean {
   return stage === '' || stage === '*';
 }
 
+/**
+ * Dimensions the lake's 5-minute count rollups group by (NAN-4184). A bare
+ * count grouped by one of these is answered from rollups, not a scan.
+ */
+const ROLLUP_DIMS = '(?:metadata\\.log_source|source_type|class_uid)';
+const ROLLUP_COUNT = '(?:count|count\\(\\s*\\))(?:\\s+as\\s+\\w+)?';
+const ROLLUP_STATS = new RegExp(`^stats\\s+${ROLLUP_COUNT}(?:\\s+by\\s+${ROLLUP_DIMS})?$`, 'i');
+const ROLLUP_TIMECHART = new RegExp(
+  `^timechart\\s+span=(\\d+)(s|m|h|d)\\s+${ROLLUP_COUNT}(?:\\s+by\\s+${ROLLUP_DIMS})?$`,
+  'i',
+);
+/** The rollup bucket: a timechart span must be a whole multiple of it. */
+const ROLLUP_BUCKET_SECONDS = 300;
+const SPAN_SECONDS: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
+/** Commands that run over the compact aggregated rows, not over events. */
+const ROLLUP_SUFFIX_COMMANDS = new Set(['sort', 'head', 'limit', 'where', 'table', 'fields', 'rename']);
+
+/**
+ * Whether nano answers this bare pipeline from its count rollups (NAN-4184,
+ * nanosiem `lake_count_rollup_answers`): `stats count [as x] [by <dim>]` or
+ * `timechart span=<whole 5m multiple> count [by <dim>]`, followed only by
+ * sort/head/where/… over the aggregated rows. These stay interactive at any
+ * window, so the inventory `* | stats count by metadata.log_source` is cheap.
+ */
+function rollupAnswered(commands: string[]): boolean {
+  const [aggregate, ...suffix] = commands;
+  if (!aggregate) return false;
+  const normalized = aggregate.replace(/\s+/g, ' ').trim();
+  let ok = ROLLUP_STATS.test(normalized);
+  if (!ok) {
+    const span = ROLLUP_TIMECHART.exec(normalized);
+    if (span) {
+      const seconds = Number(span[1]) * SPAN_SECONDS[span[2].toLowerCase()];
+      ok = seconds >= ROLLUP_BUCKET_SECONDS && seconds % ROLLUP_BUCKET_SECONDS === 0;
+    }
+  }
+  return ok && suffix.every((stage) => ROLLUP_SUFFIX_COMMANDS.has(commandName(stage)));
+}
+
 export interface QueryScope {
   /** No keyword, source/class scope or entity term before the first non-where command. */
   bare: boolean;
   /** A bare query whose commands do work over every event (stats, eval, where, timechart, …). */
   aggregates: boolean;
+  /** A bare count the lake answers from rollups (interactive at any window). */
+  rollup: boolean;
 }
 
 /** Classify an nPL query the way nano's lake does for bare `*` routing. */
 export function classifyQueryScope(query: string): QueryScope {
   const [search = '', ...commands] = splitPipeline(query ?? '');
   if (!isMatchAll(search)) {
-    return { bare: false, aggregates: false };
+    return { bare: false, aggregates: false, rollup: false };
   }
   for (const stage of commands) {
     if (commandName(stage) !== 'where') break;
     if (SCOPE_PREDICATE.test(stage.slice('where'.length))) {
-      return { bare: false, aggregates: false };
+      return { bare: false, aggregates: false, rollup: false };
     }
   }
   const aggregates = commands.some((stage) => !LISTING_COMMANDS.has(commandName(stage)));
-  return { bare: true, aggregates };
+  return { bare: true, aggregates, rollup: aggregates && rollupAnswered(commands) };
 }
 
 function formatWindow(ms: number): string {
@@ -125,7 +166,7 @@ export function bareStarRefusal(
   const windowMs = Date.parse(endIso) - Date.parse(startIso);
   if (!Number.isFinite(windowMs) || windowMs <= BARE_STAR_MAX_WINDOW_MS) return null;
   const scope = classifyQueryScope(query);
-  if (!scope.bare || !(scope.aggregates || options.aggregates)) return null;
+  if (!scope.bare || scope.rollup || !(scope.aggregates || options.aggregates)) return null;
 
   return (
     `${toolName} refused a bare \`*\` aggregation over ${formatWindow(windowMs)}: \`${query.trim() || '*'}\` names no source, class, entity or keyword, ` +
@@ -136,7 +177,8 @@ export function bareStarRefusal(
     `  - by class: \`${scopedRewrite(query, 'class_uid=<class>')}\`\n` +
     `  - by entity: \`${scopedRewrite(query, 'device.hostname="<host>"')}\` (or actor.user.name, src_endpoint.ip, a file hash)\n` +
     `  - by keyword: \`${scopedRewrite(query, '<keyword>')}\`\n` +
-    'If an unscoped aggregate is truly required, narrow the window to 4h or less (for example start_time "-4h"). ' +
+    'A plain event count by source, source type or class (`* | stats count by metadata.log_source`, or `timechart span=1h count`) is served from rollups and runs at any window. ' +
+    'If another unscoped aggregate is truly required, narrow the window to 4h or less (for example start_time "-4h"). ' +
     'Only when the analyst explicitly asked for all events across every source, retry with allow_bare_star=true.'
   );
 }

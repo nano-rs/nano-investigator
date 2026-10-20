@@ -70,8 +70,8 @@ describe('classifyQueryScope', () => {
 
 describe('bareStarRefusal', () => {
   it('refuses a bare aggregation only past 4h', () => {
-    expect(bareStarRefusal('* | stats count', START, END_4H, 'search')).toBeNull();
-    expect(bareStarRefusal('* | stats count', START, END_4H_1S, 'search')).toContain('bare `*` aggregation');
+    expect(bareStarRefusal('* | stats dc(device.hostname)', START, END_4H, 'search')).toBeNull();
+    expect(bareStarRefusal('* | stats dc(device.hostname)', START, END_4H_1S, 'search')).toContain('bare `*` aggregation');
   });
 
   it('never refuses a listing or a scoped aggregation', () => {
@@ -107,11 +107,11 @@ describe('search tool bare * guard', () => {
     const search = okSearch();
     const result = await handleSearchTool(
       'search',
-      { query: '* | stats count by metadata.log_source', start_time: START, end_time: END_7D },
+      { query: '* | stats count by actor.user.name', start_time: START, end_time: END_7D },
       client({ search }),
     );
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('metadata.log_source=<source> | stats count by metadata.log_source');
+    expect(result.content[0].text).toContain('metadata.log_source=<source> | stats count by actor.user.name');
     expect(search).not.toHaveBeenCalled();
   });
 
@@ -128,10 +128,10 @@ describe('search tool bare * guard', () => {
 
   it('runs a bare aggregation within 4h and an explicit override past it', async () => {
     const search = okSearch();
-    await handleSearchTool('search', { query: '* | stats count', start_time: START, end_time: END_4H }, client({ search }));
+    await handleSearchTool('search', { query: '* | stats dc(device.hostname)', start_time: START, end_time: END_4H }, client({ search }));
     await handleSearchTool(
       'search',
-      { query: '* | stats count', start_time: START, end_time: END_7D, allow_bare_star: true },
+      { query: '* | stats dc(device.hostname)', start_time: START, end_time: END_7D, allow_bare_star: true },
       client({ search }),
     );
     expect(search).toHaveBeenCalledTimes(2);
@@ -160,5 +160,61 @@ describe('search tool bare * guard', () => {
     const search = TOOLS.find((t) => t.name === 'search')!;
     expect(search.description).toContain('SCOPE FIRST');
     expect(search.inputSchema.properties).toHaveProperty('allow_bare_star');
+  });
+});
+
+describe('rollup-answered bare counts stay interactive (NAN-4184)', () => {
+  it.each([
+    '* | stats count by metadata.log_source',
+    '* | stats count by metadata.log_source | sort -count',
+    '* | stats count by metadata.log_source | sort -count | head 10',
+    '* | stats count by metadata.log_source | where count > 100',
+    '* | stats count() as n by source_type',
+    '* | stats count() as n by class_uid | sort -n',
+    '* | stats count',
+    '* | timechart span=1h count by metadata.log_source',
+    '* | timechart span=5m count',
+    '* | stats count() as cnt by metadata.log_source | sort -cnt | head 1000',
+    '* | stats count() as event_count by metadata.log_source | sort -event_count',
+    '* | stats count() as event_count by metadata.log_source | sort -event_count | head 50',
+    '* | stats count() as count by metadata.log_source | sort -count',
+  ])('%s runs over 7d', (query) => {
+    expect(classifyQueryScope(query).rollup).toBe(true);
+    expect(bareStarRefusal(query, START, END_7D, 'search')).toBeNull();
+  });
+
+  it.each([
+    '* | stats dc(device.hostname) by metadata.log_source',
+    '* | stats sum(severity_id) by metadata.log_source',
+    '* | stats count by actor.process.user.name',
+    '* | timechart span=1m count by metadata.log_source',
+    '* | timechart span=7m count',
+    '* | eval s=metadata.log_source | stats count by s',
+    '* | stats count by metadata.log_source | eval x=1',
+  ])('%s is refused over 7d', (query) => {
+    expect(bareStarRefusal(query, START, END_7D, 'search')).not.toBeNull();
+  });
+
+  it('runs the literal system inventory through the search tool over 7d', async () => {
+    const search = okSearch();
+    const result = await handleSearchTool(
+      'search',
+      {
+        query: '* | stats count() as event_count by metadata.log_source | sort -event_count | head 50',
+        start_time: START,
+        end_time: END_7D,
+      },
+      client({ search }),
+    );
+    expect(result.isError).not.toBe(true);
+    expect(search).toHaveBeenCalledOnce();
+
+    const refused = await handleSearchTool(
+      'search',
+      { query: '* | stats dc(device.hostname) by metadata.log_source', start_time: START, end_time: END_7D },
+      client({ search }),
+    );
+    expect(refused.isError).toBe(true);
+    expect(search).toHaveBeenCalledOnce();
   });
 });

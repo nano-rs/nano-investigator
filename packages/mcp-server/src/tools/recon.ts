@@ -432,7 +432,7 @@ const RECON_ORDER =
  */
 const RECON_BREADTH =
   'COST: prefer aggregates. `search` with `| stats count by …` or `| timechart`, and `get_field_values`, tell you the shape of an estate for the price of one scan, and that is what recon reads for. ' +
-  'Scope every probe to one source (`metadata.log_source=<source> | stats count by …`, names from the census) or a class; never run a bare `* | stats …` across the whole estate — over more than 4h it is refused here and nano runs it as a background job. ' +
+  'Scope every probe to one source (`metadata.log_source=<source> | stats count by …`, names from the census) or a class; the estate-wide inventory count (`* | stats count by metadata.log_source`, or by `class_uid`) is served from rollups and is fine at any window, but any other bare `* | stats …` (dc, sum, other group-bys) over more than 4h is refused here and nano runs it as a background job. ' +
   'But you are NOT restricted to aggregates. When a probe is ambiguous — a source type you cannot place, a field populated with values that make no sense, a count that contradicts another count — go and read the raw events under your own source scope. ' +
   'A handful of raw rows that settle the question is cheaper than a fingerprint that is confidently wrong. Record what you could not resolve in `probe_notes` rather than guessing past it.';
 

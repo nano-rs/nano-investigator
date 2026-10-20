@@ -203,7 +203,8 @@ const SCHEMA_GUIDE = {
       'Charts want aggregates: `… | stats count by field` or `… | timechart span=1h count`. A raw ' +
       'event list will render as a one-bar chart or an unreadable table. Scope every panel first ' +
       '(`metadata.log_source=… | stats …`, a class, entity or keyword): a bare `* | stats …` reads every ' +
-      'source on each refresh, and over more than 4h nano runs it as a background job.',
+      'source on each refresh, and over more than 4h nano runs it as a background job. The exception is a plain ' +
+      'count by metadata.log_source / source_type / class_uid (or `timechart span=<5m multiple> count`), served from rollups.',
     rowCap: 'Panel results are capped at 10,000 rows.',
   },
 

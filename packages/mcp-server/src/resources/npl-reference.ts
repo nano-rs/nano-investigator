@@ -199,7 +199,9 @@ A bare \`*\` search (no keyword, no source/class scope, no entity term) reads ev
 
 A leading \`| where\` on a source, class or entity field counts as scoped (\`* | where metadata.log_source=okta | stats count\`); a \`where\` after \`eval\` or on any other field does not.
 
-When \`*\` is truly needed, keep the window to 4h or less. On lean, nano runs a bare \`*\` over more than 4h with stats/eval/where/timechart as a background job, and the MCP \`search\` tool refuses it with a scoped rewrite. Plain listing (\`*\`, \`* | head 20\`) still runs but should be scoped when possible. \`get_field_values\` over more than 4h needs a scoping \`query\`.
+**Exception — the inventory count is cheap.** A plain event count by source, source type or class (\`* | stats count by metadata.log_source\`, \`* | stats count() as n by class_uid | sort -n\`, \`* | timechart span=1h count by metadata.log_source\` with a span that is a whole multiple of 5m) is served from 5-minute rollups and runs interactively at any window. \`dc\`/\`sum\`/other functions, other group-by fields, spans under 5m or an \`eval\` first all need a scan.
+
+When another \`*\` aggregate is truly needed, keep the window to 4h or less. On lean, nano runs a bare \`*\` over more than 4h with stats/eval/where/timechart as a background job, and the MCP \`search\` tool refuses it with a scoped rewrite. Plain listing (\`*\`, \`* | head 20\`) still runs but should be scoped when possible. \`get_field_values\` over more than 4h needs a scoping \`query\`; for a source inventory use \`search\` with \`* | stats count by metadata.log_source\` instead (rollup-served, any window).
 
 ### Always filter by timestamp
 nPL does this automatically from the time range you provide. For best performance, use the narrowest time range that answers your question.

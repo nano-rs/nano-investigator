@@ -204,7 +204,7 @@ const TOOL_DEFINITIONS = [
       '\n' +
       'SCOPE FIRST: start every query with a source (`metadata.log_source=<source>`, names from get_source_types), a class (`class_uid=<n>`), an entity (`device.hostname=`, `actor.user.name=`, `src_endpoint.ip=`, a file hash) or a keyword. ' +
       'Do not use a bare `*` unless it is truly required: it reads every source in the window and slows every other query. ' +
-      'If you must, keep the window to 4h or less. A bare `*` over more than 4h with stats/eval/where/timechart is refused here (nano would run it as a background job); plain listing (`* | head 20`) still runs but should be scoped when possible.\n' +
+      'If you must, keep the window to 4h or less. A bare `*` over more than 4h with stats/eval/where/timechart is refused here (nano would run it as a background job), except a plain count by source, source type or class (`* | stats count by metadata.log_source`, `* | timechart span=1h count`), which nano serves from rollups at any window; plain listing (`* | head 20`) still runs but should be scoped when possible.\n' +
       '\n' +
       `RESULT BOUNDARY: \`limit\` caps returned rows or aggregate groups, not the matching events used to compute an aggregate. The MCP surface refuses requests above ${MAX_MCP_RESULT_LIMIT} rows and returns an actionable error if an older backend violates the requested limit; it never silently slices aggregate output. For a meaningful top-N, sort before \`head\`/\`limit\`.\n` +
       '\n' +
@@ -296,7 +296,7 @@ const TOOL_DEFINITIONS = [
         },
         query: {
           type: 'string',
-          description: 'nPL query that scopes the field values, e.g. `metadata.log_source=<source>` or an entity term. Defaults to "*" (all events), which is only allowed for windows of 4h or less; scope it for longer windows.',
+          description: 'nPL query that scopes the field values, e.g. `metadata.log_source=<source>` or an entity term. Defaults to "*" (all events), which is only allowed for windows of 4h or less; scope it for longer windows. For a source inventory use `search` with `* | stats count by metadata.log_source` (rollup-served, any window).',
         },
         start_time: {
           type: 'string',

@@ -1,5 +1,6 @@
 import type { NanosiemClient } from '@nano-rs/investigator-core';
 import { type ToolResult, ok, err } from './utils.js';
+import { bareStarRefusal } from './query-scope.js';
 
 // ---------------------------------------------------------------------------
 // Helper: relative time parsing
@@ -201,6 +202,10 @@ const TOOL_DEFINITIONS = [
       '\n' +
       'Use `search_sql` only when nPL cannot express the query and this deployment supports SQL. Hosted tenants use nPL.\n' +
       '\n' +
+      'SCOPE FIRST: start every query with a source (`metadata.log_source=<source>`, names from get_source_types), a class (`class_uid=<n>`), an entity (`device.hostname=`, `actor.user.name=`, `src_endpoint.ip=`, a file hash) or a keyword. ' +
+      'Do not use a bare `*` unless it is truly required: it reads every source in the window and slows every other query. ' +
+      'If you must, keep the window to 4h or less. A bare `*` over more than 4h with stats/eval/where/timechart is refused here (nano would run it as a background job), except a plain count by source, source type or class (`* | stats count by metadata.log_source`, `* | timechart span=1h count`), which nano serves from rollups at any window; plain listing (`* | head 20`) still runs but should be scoped when possible.\n' +
+      '\n' +
       `RESULT BOUNDARY: \`limit\` caps returned rows or aggregate groups, not the matching events used to compute an aggregate. The MCP surface refuses requests above ${MAX_MCP_RESULT_LIMIT} rows and returns an actionable error if an older backend violates the requested limit; it never silently slices aggregate output. For a meaningful top-N, sort before \`head\`/\`limit\`.\n` +
       '\n' +
       'REX QUOTING: If a regex contains JSON-style double quotes, wrap the whole pattern in SINGLE quotes: `| rex field=message \'"KEY":"(?<value>[^\"]+)"\'`. Backslash does not escape a double-quoted nPL delimiter; this spelling also works on older nano backends.\n' +
@@ -235,6 +240,10 @@ const TOOL_DEFINITIONS = [
         source_type: {
           type: 'string',
           description: 'Deprecated: use metadata.log_source in the query before aggregation. The lake API does not accept this separate filter.',
+        },
+        allow_bare_star: {
+          type: 'boolean',
+          description: 'Run a bare `*` aggregation over more than 4h anyway. Set only when the analyst explicitly asked for all events across every source; nano may run it as a background job.',
         },
       },
       required: ['query', 'start_time'],
@@ -276,7 +285,8 @@ const TOOL_DEFINITIONS = [
       'The response reports `matching_event_count: null` deliberately. Use `search` with the same scope and an explicit `| stats count` ' +
       'when the investigation needs the matching population total. ' +
       'Useful for understanding the distribution of a field (e.g. top source IPs, most common process names, ' +
-      'frequent user agents) or identifying outliers during threat hunting.',
+      'frequent user agents) or identifying outliers during threat hunting. ' +
+      'Pass a scoping `query` (source, class, entity or keyword); an unscoped ranking over more than 4h is refused.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -286,7 +296,7 @@ const TOOL_DEFINITIONS = [
         },
         query: {
           type: 'string',
-          description: 'Optional nPL query to scope the field values. Defaults to "*" (all events).',
+          description: 'nPL query that scopes the field values, e.g. `metadata.log_source=<source>` or an entity term. Defaults to "*" (all events), which is only allowed for windows of 4h or less; scope it for longer windows. For a source inventory use `search` with `* | stats count by metadata.log_source` (rollup-served, any window).',
         },
         start_time: {
           type: 'string',
@@ -301,6 +311,10 @@ const TOOL_DEFINITIONS = [
           minimum: 1,
           maximum: MAX_MCP_RESULT_LIMIT,
           description: `Maximum number of ranked values to return. Defaults to ${DEFAULT_MCP_RESULT_LIMIT}; does not turn the result into a sample or population total.`,
+        },
+        allow_bare_star: {
+          type: 'boolean',
+          description: 'Rank values over all events for more than 4h anyway. Set only when the analyst explicitly asked for every source.',
         },
       },
       required: ['field', 'start_time'],
@@ -431,6 +445,11 @@ export async function handleSearchTool(
         const endTime = parseRelativeTime((args.end_time as string) ?? 'now');
         const limit = mcpResultLimit(args.limit, 'search');
         const sourceType = args.source_type as string | undefined;
+
+        if (args.allow_bare_star !== true) {
+          const refusal = bareStarRefusal(query, startTime, endTime, 'search');
+          if (refusal) return err(refusal);
+        }
 
         const result = await client.search({
           query,
@@ -595,6 +614,11 @@ export async function handleSearchTool(
         const startTime = parseRelativeTime(args.start_time as string);
         const endTime = parseRelativeTime((args.end_time as string) ?? 'now');
         const limit = mcpResultLimit(args.limit, 'get_field_values');
+
+        if (args.allow_bare_star !== true) {
+          const refusal = bareStarRefusal(query, startTime, endTime, 'get_field_values', { aggregates: true });
+          if (refusal) return err(refusal);
+        }
 
         const result = await client.getFieldValues({
           field,

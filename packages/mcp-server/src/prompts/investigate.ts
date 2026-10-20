@@ -56,7 +56,8 @@ Follow this investigation process:
 
 5. **SEARCH** for related activity — run 1-2 focused queries to expand context:
    - What else did the alerting entity do around the same time?
-   - Are there similar patterns from other entities?
+   - Are there similar patterns from other entities? Scope that search by the alert's source (\`metadata.log_source=…\`) or class, not a bare \`*\`.
+   - Start every query with a source, class, entity or keyword term. A bare \`*\` reads every source and slows every other query; if one is truly needed keep the window to 4h or less.
    - Tool choice: use search with OCSF field paths; use get_prevalence and get_entity_context for enrichment. Hosted tenants do not expose raw SQL.
 
 6. **CHECK HISTORY** — call get_related_cases to see if we've investigated this before:

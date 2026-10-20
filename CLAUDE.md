@@ -13,6 +13,7 @@
 ## Query Building Rules
 
 - **Always filter by timestamp** — nPL does this automatically from the time range you provide. Use the narrowest range that answers the question.
+- **Scope first — no bare `*`** — Every query starts with a source (`metadata.log_source=…`), class (`class_uid=…`), entity (host/user/IP/hash) or keyword. A bare `*` reads every source in the window and slows every other query. Use it only when truly required, and then keep the window ≤4h: on lean a bare `*` over 4h with stats/eval/where/timechart runs as a background job, and the `search` tool refuses it (override `allow_bare_star` only when the analyst explicitly asked for every source). Exception: the inventory count `* | stats count by metadata.log_source` (also by `source_type`/`class_uid`, or `timechart span=<whole 5m multiple> count`) is served from rollups and is fine at any window. Plain listing (`* | head 20`) still runs but should be scoped.
 - **Discover source types first** — Call `get_source_types` before writing queries that filter on source_type. Never guess or hardcode source type names (e.g. `dns`, `proxy`). The available source types vary per deployment.
 - **Use source_type when known** — Optimizes queries through partition and index pruning.
   ```

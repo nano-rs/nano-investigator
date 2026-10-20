@@ -1,5 +1,6 @@
 import type { NanosiemClient } from '@nano-rs/investigator-core';
 import { type ToolResult, ok, err } from './utils.js';
+import { classifyQueryScope } from './query-scope.js';
 
 /**
  * Recon (NAN-2238): the four primitives an agent drives to produce a hunt profile.
@@ -367,6 +368,10 @@ export function validateDrafts(value: unknown): string[] {
       errors.push(`${at}.sweep_query must be a non-empty nPL query.`);
     } else if (tooLong(draft.sweep_query, SWEEP_QUERY_MAX_BYTES)) {
       errors.push(`${at}.sweep_query exceeds the ${SWEEP_QUERY_MAX_BYTES}-byte limit.`);
+    } else if (classifyQueryScope(draft.sweep_query).bare) {
+      errors.push(
+        `${at}.sweep_query is a bare \`*\` search. A hunt sweeps long windows, so start it with a source (\`metadata.log_source=…\` from \`required_source_types\`), a class (\`class_uid=…\`) or an entity/keyword term.`,
+      );
     }
 
     if (!nonEmptyString(draft.mitre_technique)) {
@@ -427,6 +432,7 @@ const RECON_ORDER =
  */
 const RECON_BREADTH =
   'COST: prefer aggregates. `search` with `| stats count by …` or `| timechart`, and `get_field_values`, tell you the shape of an estate for the price of one scan, and that is what recon reads for. ' +
+  'Scope every probe to one source (`metadata.log_source=<source> | stats count by …`, names from the census) or a class; the estate-wide inventory count (`* | stats count by metadata.log_source`, or by `class_uid`) is served from rollups and is fine at any window, but any other bare `* | stats …` (dc, sum, other group-bys) over more than 4h is refused here and nano runs it as a background job. ' +
   'But you are NOT restricted to aggregates. When a probe is ambiguous — a source type you cannot place, a field populated with values that make no sense, a count that contradicts another count — go and read the raw events under your own source scope. ' +
   'A handful of raw rows that settle the question is cheaper than a fingerprint that is confidently wrong. Record what you could not resolve in `probe_notes` rather than guessing past it.';
 
@@ -590,7 +596,7 @@ const TOOL_DEFINITIONS = [
       '\n' +
       'Fewer, better drafts. The server caps a request at ' + MAX_DRAFTS_PER_CALL + '; a fresh deployment has hundreds of gaps, and a library nobody reads buries the handful that matter. Rank by what this estate would plausibly suffer given the fingerprint you just wrote, and offer the best few. The next run offers the next few.\n' +
       '\n' +
-      'Each draft is a thing a human will edit, so write it for them: a `doc` saying what to look for, why it is worth looking HERE, and how to judge a hit; a `sweep_query` that is a real opening nPL query (rare combinations of entity fields are usually the right opening move); `required_source_types` naming telemetry the census showed is live. Build the opening from normalized fields the census or your probes showed are populated. Prefer canonical OCSF classification such as `class_uid` and `activity_id`; do not assume a vendor numeric id such as `signature_id` exists just because that source normally emits one.\n' +
+      'Each draft is a thing a human will edit, so write it for them: a `doc` saying what to look for, why it is worth looking HERE, and how to judge a hit; a `sweep_query` that is a real opening nPL query, scoped first by source (`metadata.log_source=…`) or class and never a bare `*` (rare combinations of entity fields are usually the right opening move); `required_source_types` naming telemetry the census showed is live. Build the opening from normalized fields the census or your probes showed are populated. Prefer canonical OCSF classification such as `class_uid` and `activity_id`; do not assume a vendor numeric id such as `signature_id` exists just because that source normally emits one.\n' +
       '\n' +
       '`category` is what the hunt READS, not what it is looking for — a lateral-movement hunt over Okta logs is `identity`.\n' +
       '\n' +
@@ -619,7 +625,7 @@ const TOOL_DEFINITIONS = [
               },
               sweep_query: {
                 type: 'string',
-                description: 'The opening nPL query a human will edit. Use normalized fields the census/probes showed are populated; do not guess vendor-id population.',
+                description: 'The opening nPL query a human will edit. Start with a source (`metadata.log_source=…`), class or entity scope; a bare `*` sweep is rejected. Use normalized fields the census/probes showed are populated; do not guess vendor-id population.',
               },
               required_source_types: {
                 type: 'array',

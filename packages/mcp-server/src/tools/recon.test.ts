@@ -255,6 +255,14 @@ describe('validateDrafts — refuses to let a proposal schedule itself', () => {
 });
 
 describe('validateDrafts — refuses hunts the estate cannot run', () => {
+  it('rejects a bare * sweep query and accepts a source-scoped one (NAN-4173)', () => {
+    for (const sweep of ['*', '* | stats count by actor.user.name', '| stats count by device.hostname']) {
+      const errors = validateDrafts([{ ...draft(), sweep_query: sweep }]);
+      expect(errors.join(' '), sweep).toContain('is a bare `*` search');
+    }
+    expect(validateDrafts([{ ...draft(), sweep_query: 'metadata.log_source=okta | stats count by actor.user.name' }])).toEqual([]);
+  });
+
   it('rejects a draft with no required source types', () => {
     const errors = validateDrafts([{ ...draft(), required_source_types: [] }]);
     expect(errors.join(' ')).toContain('blind spot, not a hunt gap');

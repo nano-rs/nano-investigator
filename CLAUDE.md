@@ -9,7 +9,7 @@
 - Echo the absolute window and time zone in every answer. Wider than 7d requires a visible `widen_reason`.
 - Empty/thin results: offer 24h → 7d → 30d; never silently widen or retry a charged query. Case first-seen lookbacks may widen for a stated case reason, each as its own visible step.
 - `resolve_identity` is an as-of IP match: pass the event timestamp, or the window end. Report `observed_at`. Only directory attributes and lookup tables are current snapshots.
-- Use `lake_sql` only for sealed hours, one source table per query with `WHERE {window}` and no custom time predicate. Recent unsealed hours stay on nPL `search`. Prefer `prevalence` and `risk_scores` over raw scans for those features.
+- Use `lake_sql` only for sealed hours, one source table per query with `WHERE {window}` and no custom time predicate. Recent unsealed hours stay on nPL `search`. For prevalence use the lake_sql ingest stamp first. Cell prevalence is only for current counts or unstamped artifacts (65535). All four cell features require a narrow known entity and one-sentence reason; budgets are 6/session, 30/tenant/day, 1 concurrent/tool/tenant. Back off on budget errors. Report requested_window and effective_window for whole-part prevalence.
 
 ## Query Building Rules
 

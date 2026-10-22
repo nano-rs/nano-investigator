@@ -2,7 +2,7 @@ import type { ApiResponse } from './client.js';
 import { requireValue, resolveAgentWindow, pointTimestamp, type AgentWindow } from './agent-window.js';
 
 export type AgentToolName = 'lake_sql' | 'prevalence' | 'risk_scores' | 'resolve_identity' | 'lookup';
-export type AgentToolResponse = { window: AgentWindow | null; data?: unknown; error?: unknown; data_semantics?: string; retrieved_at?: string };
+export type AgentToolResponse = { window: AgentWindow | null; data?: unknown; error?: unknown; data_semantics?: string; retrieved_at?: string; requested_window?: unknown; effective_window?: unknown; note?: string; prevalence_semantics?: string };
 export type AgentRequest = (method: string, path: string, body?: unknown, opts?: {
   query?: Record<string, string | number | boolean | undefined>;
   originOnly?: boolean; agent?: string; timeoutMs?: number;
@@ -16,9 +16,14 @@ function text(value: unknown, name: string): string {
   requireValue(typeof value === 'string' && value.trim().length > 0 && value.length <= 2048, `invalid_${name}`);
   return value;
 }
-function strings(value: unknown, name: string, max = 100): string[] {
+function narrow(value: unknown, name: string): string {
+  const s = text(value, name);
+  requireValue(s.length <= 320 && s.trim().toLowerCase() !== 'all' && !/[*?%\[\]\x00-\x1f]/.test(s), 'explicit_entity_required_use_lake_sql_first');
+  return s;
+}
+function strings(value: unknown, name: string, max = 10): string[] {
   requireValue(Array.isArray(value) && value.length > 0 && value.length <= max, `invalid_${name}`);
-  return value.map(v => text(v, name));
+  return value.map(v => narrow(v, name));
 }
 function object(value: unknown): Record<string, unknown> {
   requireValue(value != null && typeof value === 'object' && !Array.isArray(value), 'invalid_api_response');
@@ -35,8 +40,31 @@ export async function executeAgentTool(request: AgentRequest, name: AgentToolNam
   try {
     window = resolveAgentWindow(args);
     requireValue(Object.hasOwn(FIELDS, name), 'unknown_agent_tool');
-    requireValue(Object.keys(args).every(k => [...COMMON, ...FIELDS[name]].includes(k)), 'unsupported_tool_argument');
+    requireValue(Object.keys(args).every(k => [...COMMON, ...FIELDS[name], ...(name === 'lake_sql' ? [] : ['reason'])].includes(k)), 'unsupported_tool_argument');
     const start = Date.parse(window.start), end = Date.parse(window.end);
+    const requestedWindow = window;
+    let coverage: Record<string, unknown> = {};
+    const cell = async (input: Record<string, unknown>): Promise<ApiResponse<unknown>> => {
+      const reason = text(args.reason, 'reason').trim();
+      requireValue(reason.length <= 280 && !/[\r\n]/.test(reason) && !/[.!?]\s+\S/.test(reason), 'reason_must_be_one_sentence');
+      const session = /; session=([a-f0-9-]{36})$/.exec(agent)?.[1];
+      requireValue(session, 'invalid_agent_session');
+      const response = await request('POST', '/api/agent/features', {session_id: session, reason, start: requestedWindow.start, end: requestedWindow.end, time_zone: requestedWindow.time_zone, ...(requestedWindow.widen_reason ? {widen_reason: requestedWindow.widen_reason} : {}), ...(args.case_context ? {case_context: args.case_context} : {}), input}, {agent});
+      if (!response.success) {
+        if (response.error?.message?.includes('budget')) response.error.code = 'budget';
+        return response;
+      }
+      const wrapper = object(response.data), used = object(wrapper.window);
+      requireValue(used.time_zone === requestedWindow.time_zone && (used.widen_reason ?? null) === requestedWindow.widen_reason, 'cell_window_mismatch');
+      const data = available(wrapper.data);
+      if (name === 'prevalence') {
+        const requested = object(data.requested_window), effective = object(data.effective_window);
+        requireValue(Date.parse(String(requested.start)) === start && Date.parse(String(requested.end)) === end && Date.parse(String(effective.start)) <= start && Date.parse(String(effective.end)) >= end && used.start === effective.start && used.end === effective.end && data.note === 'prevalence counted over whole parts; effective window shown', 'prevalence_window_mismatch');
+        window = {...requestedWindow, start: String(effective.start), end: String(effective.end), display_start: new Date(String(effective.start)).toLocaleString('en-US', {timeZone: requestedWindow.time_zone}), display_end: new Date(String(effective.end)).toLocaleString('en-US', {timeZone: requestedWindow.time_zone}), origin: 'whole_parts_effective_coverage'};
+        coverage = {requested_window: requested, effective_window: effective, note: data.note};
+      } else requireValue(used.start === requestedWindow.start && used.end === requestedWindow.end, 'cell_window_mismatch');
+      return {success: true, data};
+    };
     let result: ApiResponse<unknown>;
     let semantics = 'bounded_events';
     if (name === 'lake_sql') {
@@ -54,20 +82,15 @@ export async function executeAgentTool(request: AgentRequest, name: AgentToolNam
         requireValue(remote.start === window.start && remote.end === window.end && remote.time_zone === window.time_zone && remote.widen_reason === window.widen_reason, 'gateway_window_mismatch');
       }
     } else if (name === 'prevalence') {
-      result = await request('POST', '/api/prevalence/bulk', { artifacts: strings(args.values, 'values'), start: window.start, end: window.end });
-      if (result.success) {
-        const data = available(result.data);
-        const bounds = object(data.window);
-        requireValue(bounds.start === window.start && bounds.end === window.end, 'prevalence_window_mismatch');
-      }
-      semantics = 'exact_window_prevalence_with_settings_threshold';
+      result = await cell({tool: name, values: strings(args.values, 'values')});
+      semantics = 'current_prevalence_counted_over_whole_parts_with_settings_threshold';
     } else if (name === 'risk_scores') {
-      const entity = encodeURIComponent(text(args.entity, 'entity'));
-      const type = encodeURIComponent(text(args.entity_type, 'entity_type'));
+      const entity = narrow(args.entity, 'entity');
+      const type = text(args.entity_type, 'entity_type');
       // The existing ledger API supplies seven days of score samples at an
       // anchor. Refuse unsupported coverage instead of clipping a literal date.
       requireValue(end - start <= 7 * 86400000, 'risk_timeline_supports_at_most_7_days');
-      result = await request('GET', `/api/entities/${type}/${entity}/risk-timeline`, undefined, { query: { at: window.end } });
+      result = await cell({tool: name, entity, entity_type: type});
       if (result.success) {
         const data = available(result.data);
         requireValue(Date.parse(text(data.anchor, 'risk_anchor')) === end, 'risk_anchor_was_clamped');
@@ -81,7 +104,7 @@ export async function executeAgentTool(request: AgentRequest, name: AgentToolNam
     } else if (name === 'resolve_identity') {
       const reference = pointTimestamp(args.timestamp === undefined ? window.end : args.timestamp);
       const referenceTime = reference.text;
-      result = await request('GET', '/api/identity/resolve', undefined, { query: { ip: text(args.ip, 'ip'), timestamp: referenceTime } });
+      result = await cell({tool: name, ip: narrow(args.ip, 'ip'), timestamp: referenceTime});
       if (result.success) {
         const data = available(result.data);
         const match = data.match == null ? undefined : object(data.match);
@@ -95,16 +118,16 @@ export async function executeAgentTool(request: AgentRequest, name: AgentToolNam
     } else {
       if (args.ioc !== undefined) {
         requireValue(args.table_name === undefined && args.key_field === undefined && args.values === undefined && args.output_fields === undefined && args.case_insensitive === undefined, 'lookup_modes_are_exclusive');
-        result = await request('POST', '/api/threat-intel/indicator-lookup', { artifact: text(args.ioc, 'ioc') });
+        result = await cell({tool: name, ioc: narrow(args.ioc, 'ioc')});
       } else {
         const values = strings(args.values, 'values');
         requireValue(args.case_insensitive === undefined || typeof args.case_insensitive === 'boolean', 'invalid_case_insensitive');
-        result = await request('POST', '/api/lookup-tables/query', { table_name: text(args.table_name, 'table_name'), key_field: text(args.key_field, 'key_field'), key_values: values, ...(args.output_fields !== undefined ? { output_fields: strings(args.output_fields, 'output_fields') } : {}), ...(args.case_insensitive !== undefined ? { case_insensitive: args.case_insensitive } : {}) });
+        result = await cell({tool: name, table_name: text(args.table_name, 'table_name'), key_field: text(args.key_field, 'key_field'), values, ...(args.output_fields !== undefined ? { output_fields: strings(args.output_fields, 'output_fields', 32) } : {}), ...(args.case_insensitive !== undefined ? { case_insensitive: args.case_insensitive } : {}) });
       }
       semantics = 'current_lookup_snapshot_not_historical';
     }
     if (!result.success) return { success: false, data: { window, error: result.error }, error: result.error };
-    return { success: true, data: { window, data: result.data, data_semantics: semantics, retrieved_at: new Date().toISOString() } };
+    return { success: true, data: { window, data: result.data, data_semantics: semantics, ...coverage, ...(name === 'lake_sql' ? {prevalence_semantics: 'prevalence at ingest time (stamp)'} : {}), retrieved_at: new Date().toISOString() } };
   } catch (e) {
     const error = { code: 'AGENT_TOOL_REFUSED', message: e instanceof Error ? e.message : 'agent_tool_failed' };
     return { success: false, data: { window, error }, error };

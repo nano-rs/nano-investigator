@@ -8,7 +8,7 @@ const dates = { start: '2026-10-16', end: '2026-10-17', time_zone: 'America/New_
 const client = () => new NanosiemClient({ apiUrl: 'https://us.nano.rs/t/tenant-a', apiKey: 'key-a' });
 function mock(...bodies: { body: unknown; status?: number }[]) {
   const fetch = vi.fn();
-  for (const { body, status } of bodies) fetch.mockResolvedValueOnce(new Response(JSON.stringify(body), { status: status ?? 200 }));
+  for (const { body, status } of bodies) fetch.mockImplementationOnce(async (url, options) => { const req=options?.body ? JSON.parse(options.body) : {}; const wrapped=String(url).endsWith('/api/agent/features') && (status ?? 200)===200 ? {window:{start:req.start,end:req.end,time_zone:req.time_zone,widen_reason:req.widen_reason ?? null},data:body} : body; return new Response(JSON.stringify(wrapped),{status:status ?? 200}); });
   vi.stubGlobal('fetch', fetch);
   return fetch;
 }
@@ -56,54 +56,54 @@ describe('production agent client', () => {
   });
   it('passes exact prevalence bounds and keeps Settings-computed rarity', async () => {
     const window = resolveAgentWindow(dates);
-    const fetch = mock({ body: { data: [{ artifact: 'example.test', is_rare: true }], window: { start: window.start, end: window.end }, availability: { available: true } } });
-    const result = await client().agentTool('prevalence', { ...dates, values: ['example.test'] });
+    const fetch = mock({ body: { data: [{ artifact: 'example.test', is_rare: true }], requested_window: { start: window.start, end: window.end }, effective_window: { start: window.start, end: window.end }, note: 'prevalence counted over whole parts; effective window shown', availability: { available: true } } });
+    const result = await client().agentTool('prevalence', { reason: 'Check the suspicious entity from lake SQL.', ...dates, values: ['example.test'] });
     expect(result.success).toBe(true);
-    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ artifacts: ['example.test'], start: window.start, end: window.end });
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({input: {tool: 'prevalence', values: ['example.test']}, reason: expect.any(String), session_id: expect.any(String), start: window.start, end: window.end });
   });
   it('refuses an old prevalence API that silently ignores absolute bounds, and unavailable cells', async () => {
     mock({ body: { data: [] } }, { body: { data: [], availability: { available: false, reason: 'pending' } } });
-    for (let i = 0; i < 2; i++) expect((await client().agentTool('prevalence', { ...dates, values: ['x.test'] })).success).toBe(false);
+    for (let i = 0; i < 2; i++) expect((await client().agentTool('prevalence', { reason: 'Check the suspicious entity from lake SQL.', ...dates, values: ['x.test'] })).success).toBe(false);
   });
   it('resolves the same IP at two explicit timestamps into distinct observations', async () => {
-    const fetch = vi.fn(async (url: string) => {
-      const at = new URL(url).searchParams.get('timestamp');
-      return new Response(JSON.stringify({ ip: '192.0.2.1', match: { hostname: at === '2026-10-16T08:00:00.000Z' ? 'before' : 'after', last_seen: at } }));
+    const fetch = vi.fn(async (_url: string, options: RequestInit) => {
+      const req = JSON.parse(String(options.body)); const at=req.input.timestamp;
+      return new Response(JSON.stringify({window:{start:req.start,end:req.end,time_zone:req.time_zone,widen_reason:req.widen_reason??null},data:{ ip: '192.0.2.1', match: { hostname: at === '2026-10-16T08:00:00.000Z' ? 'before' : 'after', last_seen: at } }}));
     });
     vi.stubGlobal('fetch', fetch);
     const sdk = client();
-    const first = await sdk.agentTool('resolve_identity', { ...dates, ip: '192.0.2.1', timestamp: '2026-10-16T04:00:00-04:00' });
-    const second = await sdk.agentTool('resolve_identity', { ...dates, ip: '192.0.2.1', timestamp: '2026-10-16T12:00:00-04:00' });
+    const first = await sdk.agentTool('resolve_identity', { reason: 'Check the suspicious entity from lake SQL.', ...dates, ip: '192.0.2.1', timestamp: '2026-10-16T04:00:00-04:00' });
+    const second = await sdk.agentTool('resolve_identity', { reason: 'Check the suspicious entity from lake SQL.', ...dates, ip: '192.0.2.1', timestamp: '2026-10-16T12:00:00-04:00' });
     expect(first.data?.data).toMatchObject({ match: { hostname: 'before' }, observed_at: '2026-10-16T08:00:00.000Z' });
     expect(second.data?.data).toMatchObject({ match: { hostname: 'after' }, observed_at: '2026-10-16T16:00:00.000Z' });
   });
   it('uses the literal window end for identity when no event timestamp was supplied', async () => {
     const fetch = mock({ body: { match: null, ip: '192.0.2.1' } });
-    const result = await client().agentTool('resolve_identity', { ...dates, ip: '192.0.2.1' });
+    const result = await client().agentTool('resolve_identity', { reason: 'Check the suspicious entity from lake SQL.', ...dates, ip: '192.0.2.1' });
     expect(result.success).toBe(true);
-    expect(new URL(fetch.mock.calls[0][0]).searchParams.get('timestamp')).toBe('2026-10-17T04:00:00.000Z');
+    expect(JSON.parse(fetch.mock.calls[0][1].body).input.timestamp).toBe('2026-10-17T04:00:00.000Z');
     expect(result.data?.data).toMatchObject({ observed_at: null });
   });
   it('withholds observations newer than the requested event time', async () => {
     mock({ body: { match: { last_seen: '2026-10-18T00:00:00Z' } } });
-    expect((await client().agentTool('resolve_identity', { ...dates, ip: '192.0.2.1' })).success).toBe(false);
+    expect((await client().agentTool('resolve_identity', { reason: 'Check the suspicious entity from lake SQL.', ...dates, ip: '192.0.2.1' })).success).toBe(false);
   });
   it('filters risk samples to the exact window and refuses clamped anchors', async () => {
     const window = resolveAgentWindow(dates);
     mock({ body: { anchor: window.end, step_seconds: 3600, window_hours: 168, points: [{ t: '2026-10-16T03:00:00Z', score: 9 }, { t: '2026-10-16T04:00:00Z', score: 2 }, { t: window.end, score: 5 }], markers: [{ private: true }] } }, { body: { anchor: now } });
-    const result = await client().agentTool('risk_scores', { ...dates, entity: 'user/a', entity_type: 'user' });
+    const result = await client().agentTool('risk_scores', { reason: 'Check the suspicious entity from lake SQL.', ...dates, entity: 'user/a', entity_type: 'user' });
     expect(result.data?.data).toMatchObject({ points: [{ t: '2026-10-16T04:00:00Z', score: 2 }] });
     expect(JSON.stringify(result)).not.toContain('private');
-    expect((await client().agentTool('risk_scores', { ...dates, entity: 'a', entity_type: 'user' })).success).toBe(false);
+    expect((await client().agentTool('risk_scores', { reason: 'Check the suspicious entity from lake SQL.', ...dates, entity: 'a', entity_type: 'user' })).success).toBe(false);
   });
   it('labels lookup snapshots current while preserving a historical analysis window', async () => {
     const fetch = mock({ body: { results: [] } }, { body: { matches: [] } });
     const sdk = client();
-    const result = await sdk.agentTool('lookup', { ...dates, table_name: 'owners', key_field: 'host', values: ['h'] });
+    const result = await sdk.agentTool('lookup', { reason: 'Check the suspicious entity from lake SQL.', ...dates, table_name: 'owners', key_field: 'host', values: ['h'] });
     expect(result.data).toMatchObject({ window: resolveAgentWindow(dates), data_semantics: 'current_lookup_snapshot_not_historical', retrieved_at: expect.any(String) });
-    await sdk.agentTool('lookup', { ...dates, ioc: 'evil.test' });
-    expect(fetch.mock.calls[1][0]).toBe('https://us.nano.rs/t/tenant-a/api/threat-intel/indicator-lookup');
-    expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ artifact: 'evil.test' });
+    await sdk.agentTool('lookup', { reason: 'Check the suspicious entity from lake SQL.', ...dates, ioc: 'evil.test' });
+    expect(fetch.mock.calls[1][0]).toBe('https://us.nano.rs/t/tenant-a/api/agent/features');
+    expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject({input:{tool:'lookup',ioc:'evil.test'}});
   });
   it('does not send invalid bounds or widening without a reason for any tool', async () => {
     const fetch = mock();
@@ -135,10 +135,24 @@ it('preserves microsecond event timestamps and refuses observations one microsec
   const at = '2026-10-16T08:00:00.123456Z';
   const fetch = mock({ body: { match: { last_seen: at, hostname: 'precise' } } }, { body: { match: { last_seen: '2026-10-16T08:00:00.123457Z' } } });
   const sdk = client();
-  const args = { ...dates, ip: '192.0.2.1', timestamp: '2026-10-16T04:00:00.123456-04:00' };
+  const args = { reason: 'Check the suspicious event attribution.', ...dates, ip: '192.0.2.1', timestamp: '2026-10-16T04:00:00.123456-04:00' };
   const first = await sdk.agentTool('resolve_identity', args);
   expect(first.success).toBe(true);
-  expect(new URL(fetch.mock.calls[0][0]).searchParams.get('timestamp')).toBe(at);
+  expect(JSON.parse(fetch.mock.calls[0][1].body).input.timestamp).toBe(at);
   expect(first.data?.data).toMatchObject({ reference_time: at, observed_at: at });
   expect((await sdk.agentTool('resolve_identity', args)).success).toBe(false);
+});
+
+it('refuses missing reasons and broad entities and reports budget once', async()=>{
+ const fetch=mock(); const sdk=client();
+ for(const args of [{values:['a.test']},{reason:'Investigate.',values:['all']},{reason:'Investigate.',values:['*.test']},{reason:'Investigate.',values:Array(11).fill('a.test')}]) expect((await sdk.agentTool('prevalence',args)).success).toBe(false);
+ expect(fetch).not.toHaveBeenCalled();
+ const denied=mock({body:{message:'budget: budget_session; back off'},status:429});
+ const result=await sdk.agentTool('prevalence',{reason:'Investigate.',values:['a.test']});expect(result.error?.code).toBe('budget');expect(denied).toHaveBeenCalledTimes(1);
+});
+it('echoes wider whole-part coverage rather than claiming the requested range is exact',async()=>{
+ const requested=resolveAgentWindow(dates), effective={start:'2026-10-16T03:00:00.000Z',end:'2026-10-17T05:00:00.000Z'};
+ const fetch=vi.fn(async (_url,opts)=>{const req=JSON.parse(opts.body);return new Response(JSON.stringify({window:{...effective,time_zone:req.time_zone,widen_reason:null},data:{data:[{total_occurrences:3}],requested_window:{start:requested.start,end:requested.end},effective_window:effective,note:'prevalence counted over whole parts; effective window shown'}}));});vi.stubGlobal('fetch',fetch);
+ const result=await client().agentTool('prevalence',{...dates,values:['a.test'],reason:'Verify current rarity.'});
+ expect(result.success).toBe(true);expect(result.data?.window).toMatchObject(effective);expect(result.data?.requested_window).toMatchObject({start:requested.start,end:requested.end});expect(result.data?.effective_window).toEqual(effective);
 });

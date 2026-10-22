@@ -1,0 +1,60 @@
+{
+ "result": {
+  "request_id": "dqe-prod-01M5JT537YJ6WJEZMPG923046W",
+  "schema": [
+   {
+    "name": "n1",
+    "descriptor": {
+     "type": {
+      "name": "string"
+     },
+     "nullable": true
+    }
+   },
+   {
+    "name": "n2",
+    "descriptor": {
+     "type": {
+      "name": "string"
+     },
+     "nullable": true
+    }
+   },
+   {
+    "name": "hc",
+    "descriptor": {
+     "type": {
+      "name": "int64"
+     },
+     "nullable": true
+    }
+   }
+  ],
+  "rows": [
+   {
+    "n1": "http_request.url.hostname",
+    "n2": "dst_endpoint.ip",
+    "hc": null
+   },
+   {
+    "n1": "http_request.url.hostname",
+    "n2": "dst_endpoint.ip",
+    "hc": null
+   },
+   {
+    "n1": "http_request.url.hostname",
+    "n2": "dst_endpoint.ip",
+    "hc": null
+   }
+  ],
+  "metrics": {
+   "r2_requests_count": 71,
+   "files_scanned": 22,
+   "bytes_scanned": 47669544,
+   "cache_hits": 68
+  }
+ },
+ "success": true,
+ "errors": [],
+ "messages": []
+}

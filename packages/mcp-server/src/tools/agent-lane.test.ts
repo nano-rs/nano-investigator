@@ -24,13 +24,13 @@ it.each(TOOLS.map(t => t.name))('%s returns the window on refusal through the pr
   expect(fetch).not.toHaveBeenCalled();
 });
 it('resolves the same IP at two event times through the MCP handler', async () => {
-  const fetch = vi.fn(async (url: string) => {
-    const timestamp = new URL(url).searchParams.get('timestamp');
-    return new Response(JSON.stringify({ match: { last_seen: timestamp, hostname: timestamp?.startsWith('2026-10-16T01') ? 'first' : 'second' } }));
+  const fetch = vi.fn(async (_url: string, options: RequestInit) => {
+    const req=JSON.parse(String(options.body));const timestamp=req.input.timestamp;
+    return new Response(JSON.stringify({window:{start:req.start,end:req.end,time_zone:req.time_zone,widen_reason:null},data:{match:{last_seen:timestamp,hostname:timestamp?.startsWith('2026-10-16T01')?'first':'second'}}}));
   });
   vi.stubGlobal('fetch', fetch);
   const sdk = new NanosiemClient({ apiUrl: 'https://us.nano.rs/t/a', apiKey: 'key-a' });
-  const run = async (timestamp: string) => JSON.parse((await handleAgentLaneTool('resolve_identity', { ip: '192.0.2.1', timestamp, start: '2026-10-16', end: '2026-10-17' }, sdk)).content[0].text);
+  const run = async (timestamp: string) => JSON.parse((await handleAgentLaneTool('resolve_identity', { reason: 'Attribute the suspicious event.', ip: '192.0.2.1', timestamp, start: '2026-10-16', end: '2026-10-17' }, sdk)).content[0].text);
   expect((await run('2026-10-16T01:00:00Z')).data).toMatchObject({ match: { hostname: 'first' }, observed_at: '2026-10-16T01:00:00.000Z' });
   expect((await run('2026-10-16T02:00:00Z')).data).toMatchObject({ match: { hostname: 'second' }, observed_at: '2026-10-16T02:00:00.000Z' });
 });
@@ -41,4 +41,11 @@ it('campaign guidance uses the bounded lane and a 24h default, without the legac
   expect(prompt).toContain('WHERE {window}');
   expect(prompt).toContain('never silently widen');
   expect(prompt).not.toContain('reach for `search_sql`');
+});
+
+it('puts stamp-first guidance and enforceable cell restrictions in the public tool catalog',()=>{
+ const lake=TOOLS.find(t=>t.name==='lake_sql')!;
+ expect(lake.description).toContain('prevalence at ingest time (stamp)');expect(lake.description).toContain('enrichments[6]');
+ for(const tool of TOOLS.filter(t=>t.name!=='lake_sql')){expect(tool.inputSchema.required).toContain('reason');expect(tool.description).toContain('6 calls per session');expect(tool.description).toContain('30 calls per tenant');}
+ expect(TOOLS.find(t=>t.name==='prevalence')!.description).toContain('call this only for current counts or unstamped artifacts');
 });

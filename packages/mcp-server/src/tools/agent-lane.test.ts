@@ -1,3 +1,4 @@
+import { getHuntCampaignPrompt } from '../prompts/hunt.js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { NanosiemClient } from '@nano-rs/investigator-core';
 import { TOOLS, handleAgentLaneTool } from './agent-lane.js';
@@ -32,4 +33,12 @@ it('resolves the same IP at two event times through the MCP handler', async () =
   const run = async (timestamp: string) => JSON.parse((await handleAgentLaneTool('resolve_identity', { ip: '192.0.2.1', timestamp, start: '2026-10-16', end: '2026-10-17' }, sdk)).content[0].text);
   expect((await run('2026-10-16T01:00:00Z')).data).toMatchObject({ match: { hostname: 'first' }, observed_at: '2026-10-16T01:00:00.000Z' });
   expect((await run('2026-10-16T02:00:00Z')).data).toMatchObject({ match: { hostname: 'second' }, observed_at: '2026-10-16T02:00:00.000Z' });
+});
+
+it('campaign guidance uses the bounded lane and a 24h default, without the legacy SQL escape hatch', () => {
+  const prompt = getHuntCampaignPrompt({ description: 'fixture hunt' }).messages[0].content.text;
+  expect(prompt).toContain('Time range: -24h');
+  expect(prompt).toContain('WHERE {window}');
+  expect(prompt).toContain('never silently widen');
+  expect(prompt).not.toContain('reach for `search_sql`');
 });

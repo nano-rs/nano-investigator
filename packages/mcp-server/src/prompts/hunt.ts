@@ -145,7 +145,7 @@ Time range: ${timeRange}
 - What MITRE ATT&CK techniques are relevant? Use get_mitre_technique to understand them.
 - What log sources do we need? Use get_source_types to confirm availability.
 - What specific artifacts, behaviors, or indicators should we look for?
-- Design 3-5 targeted searches. Scope every one first: a source (\`metadata.log_source=…\` from get_source_types), a class (\`class_uid=…\`), an entity or a keyword. Never a bare \`*\` across the ${timeRange} window — it reads every source and slows every other query (over 4h nano runs it as a background job and the search tool refuses it). Use \`search\` (nPL) for terse \`| stats\` / \`| table\` patterns; reach for \`search_sql\` when the hunt needs joins (logs ↔ signals, ASOF identity), JSON \`ext.*\` access, or \`uniqMerge\` against prevalence summary tables.
+- Design 3-5 targeted searches. Scope every one first: a source (\`metadata.log_source=…\` from get_source_types), a class (\`class_uid=…\`), an entity or a keyword. Never a bare \`*\` across the ${timeRange} window — it reads every source and slows every other query (over 4h nano runs it as a background job and the search tool refuses it). Use \`search\` (nPL) for fresh events and terse \`| stats\` / \`| table\` patterns. For sealed hours use \`lake_sql\`, one source table with \`WHERE {window}\`. Use the bounded \`prevalence\`, \`risk_scores\`, \`resolve_identity\` and \`lookup\` tools for cell features; join their returned values client-side.
 
 ## Step 2: BUILD AND RUN QUERIES
 - Run each query with the ${timeRange} lookback

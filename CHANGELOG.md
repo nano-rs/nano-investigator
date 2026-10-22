@@ -1,5 +1,9 @@
 # Changelog
 
+## SOAR tools (NAN-4375)
+
+Add 26 tools for tenant SOAR: settings, catalog packs (install/upgrade/remove), connections (create/update/test/remove), actions (list/run), flows (validate/create/update/remove/run), runs (list/detail/cancel) and approvals (read). Requests are contract-tested against the tenant OpenAPI spec (`fixtures/soar-openapi.json`, refreshed by `scripts/refresh-soar-openapi.mjs`). Writes require `user_confirmed=true`. Action and flow runs are external side effects with a confirmation-free `dry_run`. Credentials are write-only and redacted everywhere. The `soar_workflow` prompt and `skills/soar-automation` are included. Enabling SOAR and approving runs remain human-session-only in nano. Output redaction moved to the shared `tools/redaction.ts`.
+
 ## Ingestion diagnostics (NAN-4015)
 
 Read pipeline drafts, inputs, runtime capabilities, release rollouts, Add data delivery, source onboarding plans and synced parser repositories. Tool names and schemas align with nanodac. Ingestion writes and legacy transport/credential onboarding shortcuts move to nano Desktop or nanodac; see [migration details](docs/ingestion-capability-matrix.md#migration).

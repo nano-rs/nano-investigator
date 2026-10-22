@@ -1,0 +1,578 @@
+{
+  "_comment": "Synthetic SOAR wire responses (NAN-4375), validated against soar-openapi.json by soar.client-contract.test.ts. Synthetic IDs only; no tenant data or credentials.",
+  "settings": {
+    "soar_enabled": true,
+    "revision": 4
+  },
+  "settings_disabled": {
+    "soar_enabled": false,
+    "revision": 1
+  },
+  "packs": {
+    "catalog_status": "current",
+    "catalog_expires_at": "2026-10-29T00:00:00Z",
+    "packs": [
+      {
+        "origin": "catalog",
+        "availability": "available",
+        "name": "crowdstrike_falcon",
+        "display_name": "CrowdStrike Falcon",
+        "description": "EDR containment and lookups",
+        "vendor": "CrowdStrike",
+        "categories": [
+          "edr"
+        ],
+        "version": "1.2.0",
+        "installed_version": "1.1.0",
+        "installed": true,
+        "enabled": true,
+        "withdrawn": false,
+        "change_summary": "Adds lift_containment rollback",
+        "config_fields": [
+          {
+            "name": "base_url",
+            "label": "API base URL",
+            "required": true,
+            "one_of": [],
+            "default": "https://api.crowdstrike.com"
+          }
+        ],
+        "credential_fields": [
+          {
+            "name": "client_secret",
+            "label": "Client secret",
+            "required": true,
+            "configured": false
+          }
+        ],
+        "actions": [
+          {
+            "name": "contain_host",
+            "display_name": "Contain host",
+            "description": "Network-contain a host",
+            "effect": "contain",
+            "approval_required": true,
+            "approval_forced": false,
+            "idempotent": true,
+            "inputs": [
+              {
+                "name": "hostname",
+                "type": "string",
+                "required": true,
+                "pattern": null
+              }
+            ],
+            "require_one_of": [],
+            "rollback": "lift_containment"
+          }
+        ],
+        "test_action": "whoami",
+        "provenance": {
+          "catalog": "fixture",
+          "digest": "sha256:fixture"
+        },
+        "per_minute": 60,
+        "per_day": 1000
+      },
+      {
+        "origin": "catalog",
+        "availability": "available",
+        "name": "okta",
+        "display_name": "Okta",
+        "description": "Identity provider",
+        "vendor": "Okta",
+        "categories": [
+          "identity"
+        ],
+        "version": "1.2.0",
+        "installed_version": null,
+        "installed": false,
+        "enabled": false,
+        "withdrawn": false,
+        "change_summary": "Adds lift_containment rollback",
+        "config_fields": [
+          {
+            "name": "base_url",
+            "label": "API base URL",
+            "required": true,
+            "one_of": [],
+            "default": "https://api.crowdstrike.com"
+          }
+        ],
+        "credential_fields": [
+          {
+            "name": "client_secret",
+            "label": "Client secret",
+            "required": true,
+            "configured": false
+          }
+        ],
+        "actions": [],
+        "test_action": null,
+        "provenance": {
+          "catalog": "fixture",
+          "digest": "sha256:fixture"
+        },
+        "per_minute": 60,
+        "per_day": 1000
+      },
+      {
+        "origin": "catalog",
+        "availability": "available",
+        "name": "old_vendor",
+        "display_name": "Old vendor",
+        "description": "Identity provider",
+        "vendor": "Okta",
+        "categories": [
+          "identity"
+        ],
+        "version": "1.2.0",
+        "installed_version": null,
+        "installed": false,
+        "enabled": false,
+        "withdrawn": true,
+        "change_summary": "Adds lift_containment rollback",
+        "config_fields": [
+          {
+            "name": "base_url",
+            "label": "API base URL",
+            "required": true,
+            "one_of": [],
+            "default": "https://api.crowdstrike.com"
+          }
+        ],
+        "credential_fields": [
+          {
+            "name": "client_secret",
+            "label": "Client secret",
+            "required": true,
+            "configured": false
+          }
+        ],
+        "actions": [],
+        "test_action": null,
+        "provenance": {
+          "catalog": "fixture",
+          "digest": "sha256:fixture"
+        },
+        "per_minute": 60,
+        "per_day": 1000
+      }
+    ]
+  },
+  "pack": {
+    "catalog_status": "current",
+    "catalog_expires_at": null,
+    "packs": [
+      {
+        "origin": "catalog",
+        "availability": "available",
+        "name": "crowdstrike_falcon",
+        "display_name": "CrowdStrike Falcon",
+        "description": "EDR containment and lookups",
+        "vendor": "CrowdStrike",
+        "categories": [
+          "edr"
+        ],
+        "version": "1.2.0",
+        "installed_version": "1.1.0",
+        "installed": true,
+        "enabled": true,
+        "withdrawn": false,
+        "change_summary": "Adds lift_containment rollback",
+        "config_fields": [
+          {
+            "name": "base_url",
+            "label": "API base URL",
+            "required": true,
+            "one_of": [],
+            "default": "https://api.crowdstrike.com"
+          }
+        ],
+        "credential_fields": [
+          {
+            "name": "client_secret",
+            "label": "Client secret",
+            "required": true,
+            "configured": false
+          }
+        ],
+        "actions": [
+          {
+            "name": "contain_host",
+            "display_name": "Contain host",
+            "description": "Network-contain a host",
+            "effect": "contain",
+            "approval_required": true,
+            "approval_forced": false,
+            "idempotent": true,
+            "inputs": [
+              {
+                "name": "hostname",
+                "type": "string",
+                "required": true,
+                "pattern": null
+              }
+            ],
+            "require_one_of": [],
+            "rollback": "lift_containment"
+          }
+        ],
+        "test_action": "whoami",
+        "provenance": {
+          "catalog": "fixture",
+          "digest": "sha256:fixture"
+        },
+        "per_minute": 60,
+        "per_day": 1000
+      }
+    ]
+  },
+  "connections": {
+    "connections": [
+      {
+        "id": "00000000-0000-4000-8000-000000000011",
+        "pack_name": "crowdstrike_falcon",
+        "label": "Falcon prod",
+        "config": {
+          "base_url": "https://api.crowdstrike.com"
+        },
+        "credential_fields": [
+          {
+            "name": "client_secret",
+            "label": "Client secret",
+            "required": true,
+            "configured": true
+          }
+        ],
+        "ready": true,
+        "created_at": "2026-10-22T12:00:00Z",
+        "updated_at": "2026-10-22T12:00:00Z",
+        "last_test_at": "2026-10-22T12:00:00Z",
+        "last_test_status": "success",
+        "active_runs": 0,
+        "can_delete": true
+      }
+    ]
+  },
+  "connection": {
+    "id": "00000000-0000-4000-8000-000000000011",
+    "pack_name": "crowdstrike_falcon",
+    "label": "Falcon prod",
+    "config": {
+      "base_url": "https://api.crowdstrike.com"
+    },
+    "credential_fields": [
+      {
+        "name": "client_secret",
+        "label": "Client secret",
+        "required": true,
+        "configured": true
+      }
+    ],
+    "ready": true,
+    "created_at": "2026-10-22T12:00:00Z",
+    "updated_at": "2026-10-22T12:00:00Z",
+    "last_test_at": "2026-10-22T12:00:00Z",
+    "last_test_status": "success",
+    "active_runs": 0,
+    "can_delete": true
+  },
+  "test_result": {
+    "status": "success",
+    "message": null,
+    "outputs": {
+      "user": "svc-nano"
+    },
+    "tested_at": "2026-10-22T12:00:00Z"
+  },
+  "run": {
+    "id": "00000000-0000-4000-8000-000000000021",
+    "connection_id": "00000000-0000-4000-8000-000000000011",
+    "pack_name": "crowdstrike_falcon",
+    "pack_version": "1.1.0",
+    "action": "contain_host",
+    "inputs": {
+      "hostname": "ws-eng-001"
+    },
+    "case_id": null,
+    "dry_run": true,
+    "status": "queued",
+    "requested_by": "00000000-0000-4000-8000-000000000001",
+    "approval_required": false,
+    "created_at": "2026-10-22T12:00:00Z",
+    "outputs": {},
+    "error_class": null,
+    "wall_delivery": {
+      "status": "not_requested"
+    },
+    "flow_id": null,
+    "flow_version": null,
+    "trigger_kind": "manual",
+    "trigger_ref": null,
+    "started_at": null,
+    "finished_at": null,
+    "executor_pending": false
+  },
+  "runs": {
+    "runs": [
+      {
+        "id": "00000000-0000-4000-8000-000000000021",
+        "connection_id": "00000000-0000-4000-8000-000000000011",
+        "pack_name": "crowdstrike_falcon",
+        "pack_version": "1.1.0",
+        "action": "contain_host",
+        "inputs": {
+          "hostname": "ws-eng-001"
+        },
+        "case_id": null,
+        "dry_run": true,
+        "status": "queued",
+        "requested_by": "00000000-0000-4000-8000-000000000001",
+        "approval_required": false,
+        "created_at": "2026-10-22T12:00:00Z",
+        "outputs": {},
+        "error_class": null,
+        "wall_delivery": {
+          "status": "not_requested"
+        },
+        "flow_id": null,
+        "flow_version": null,
+        "trigger_kind": "manual",
+        "trigger_ref": null,
+        "started_at": null,
+        "finished_at": null,
+        "executor_pending": false
+      }
+    ],
+    "limit": 50,
+    "offset": 0
+  },
+  "run_detail": {
+    "id": "00000000-0000-4000-8000-000000000021",
+    "connection_id": "00000000-0000-4000-8000-000000000011",
+    "pack_name": "crowdstrike_falcon",
+    "pack_version": "1.1.0",
+    "action": "contain_host",
+    "inputs": {
+      "hostname": "ws-eng-001"
+    },
+    "case_id": null,
+    "dry_run": true,
+    "status": "queued",
+    "requested_by": "00000000-0000-4000-8000-000000000001",
+    "approval_required": false,
+    "created_at": "2026-10-22T12:00:00Z",
+    "outputs": {},
+    "error_class": null,
+    "wall_delivery": {
+      "status": "not_requested"
+    },
+    "flow_id": null,
+    "flow_version": null,
+    "trigger_kind": "manual",
+    "trigger_ref": null,
+    "started_at": null,
+    "finished_at": null,
+    "executor_pending": false,
+    "steps": [
+      {
+        "id": "00000000-0000-4000-8000-000000000041",
+        "module_id": "contain",
+        "iteration": {},
+        "attempt": 1,
+        "attempt_group": 0,
+        "status": "succeeded",
+        "request_summary": {
+          "method": "POST",
+          "path": "/devices/entities/devices-actions/v2"
+        },
+        "outputs": {
+          "dry_run": true
+        },
+        "error_class": null,
+        "started_at": "2026-10-22T12:00:00Z",
+        "finished_at": "2026-10-22T12:00:00Z"
+      }
+    ],
+    "approvals": [
+      {
+        "id": "00000000-0000-4000-8000-000000000031",
+        "run_id": "00000000-0000-4000-8000-000000000021",
+        "module_id": "contain",
+        "requested_action": {
+          "pack": "crowdstrike_falcon",
+          "action": "contain_host"
+        },
+        "requested_by": "00000000-0000-4000-8000-000000000001",
+        "requested_source": "manual",
+        "ambiguous": false,
+        "status": "pending",
+        "created_at": "2026-10-22T12:00:00Z",
+        "expires_at": "2026-10-23T12:00:00Z",
+        "decided_by": null,
+        "decided_at": null,
+        "choice": null,
+        "reason": null
+      }
+    ],
+    "next_steps_offset": null,
+    "next_approvals_offset": null
+  },
+  "flows": {
+    "flows": [
+      {
+        "id": "00000000-0000-4000-8000-000000000051",
+        "name": "Contain host",
+        "version": 3,
+        "status": "draft",
+        "definition": {
+          "summary": "Contain host",
+          "value": {
+            "modules": [
+              {
+                "id": "contain",
+                "value": {
+                  "type": "action",
+                  "pack": "crowdstrike_falcon",
+                  "action": "contain_host",
+                  "connection": "00000000-0000-4000-8000-000000000011",
+                  "input_transforms": {
+                    "hostname": {
+                      "type": "expr",
+                      "expr": "flow_input.hostname"
+                    }
+                  },
+                  "approval": "required"
+                }
+              }
+            ]
+          }
+        },
+        "trigger": {
+          "on": "manual"
+        },
+        "created_by": "00000000-0000-4000-8000-000000000001",
+        "updated_by": "00000000-0000-4000-8000-000000000001",
+        "created_at": "2026-10-22T12:00:00Z",
+        "updated_at": "2026-10-22T12:00:00Z",
+        "next_run_at": null
+      }
+    ],
+    "event_overflow_count": 0,
+    "last_event_overflow_at": null,
+    "admission_backpressure": null
+  },
+  "flow": {
+    "id": "00000000-0000-4000-8000-000000000051",
+    "name": "Contain host",
+    "version": 3,
+    "status": "draft",
+    "definition": {
+      "summary": "Contain host",
+      "value": {
+        "modules": [
+          {
+            "id": "contain",
+            "value": {
+              "type": "action",
+              "pack": "crowdstrike_falcon",
+              "action": "contain_host",
+              "connection": "00000000-0000-4000-8000-000000000011",
+              "input_transforms": {
+                "hostname": {
+                  "type": "expr",
+                  "expr": "flow_input.hostname"
+                }
+              },
+              "approval": "required"
+            }
+          }
+        ]
+      }
+    },
+    "trigger": {
+      "on": "manual"
+    },
+    "created_by": "00000000-0000-4000-8000-000000000001",
+    "updated_by": "00000000-0000-4000-8000-000000000001",
+    "created_at": "2026-10-22T12:00:00Z",
+    "updated_at": "2026-10-22T12:00:00Z",
+    "next_run_at": null
+  },
+  "flow_definition": {
+    "summary": "Contain host",
+    "value": {
+      "modules": [
+        {
+          "id": "contain",
+          "value": {
+            "type": "action",
+            "pack": "crowdstrike_falcon",
+            "action": "contain_host",
+            "connection": "00000000-0000-4000-8000-000000000011",
+            "input_transforms": {
+              "hostname": {
+                "type": "expr",
+                "expr": "flow_input.hostname"
+              }
+            },
+            "approval": "required"
+          }
+        }
+      ]
+    }
+  },
+  "flow_validation": {
+    "valid": true,
+    "module_count": 1,
+    "summary": "1 module: contain (action crowdstrike_falcon/contain_host)"
+  },
+  "approvals": {
+    "approvals": [
+      {
+        "id": "00000000-0000-4000-8000-000000000031",
+        "run_id": "00000000-0000-4000-8000-000000000021",
+        "module_id": "contain",
+        "requested_action": {
+          "pack": "crowdstrike_falcon",
+          "action": "contain_host"
+        },
+        "requested_by": "00000000-0000-4000-8000-000000000001",
+        "requested_source": "manual",
+        "ambiguous": false,
+        "status": "pending",
+        "created_at": "2026-10-22T12:00:00Z",
+        "expires_at": "2026-10-23T12:00:00Z",
+        "decided_by": null,
+        "decided_at": null,
+        "choice": null,
+        "reason": null
+      }
+    ],
+    "limit": 50,
+    "offset": 0
+  },
+  "approval": {
+    "id": "00000000-0000-4000-8000-000000000031",
+    "run_id": "00000000-0000-4000-8000-000000000021",
+    "module_id": "contain",
+    "requested_action": {
+      "pack": "crowdstrike_falcon",
+      "action": "contain_host"
+    },
+    "requested_by": "00000000-0000-4000-8000-000000000001",
+    "requested_source": "manual",
+    "ambiguous": false,
+    "status": "pending",
+    "created_at": "2026-10-22T12:00:00Z",
+    "expires_at": "2026-10-23T12:00:00Z",
+    "decided_by": null,
+    "decided_at": null,
+    "choice": null,
+    "reason": null
+  },
+  "deleted": {
+    "deleted": true
+  }
+}

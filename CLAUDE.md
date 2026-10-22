@@ -111,6 +111,15 @@ When you discover a suspicious IOC (domain, IP, hash, etc.), **immediately pivot
 - **Notebooks** are for detailed investigation findings — timelines, IOC tables, process trees, full analysis. Use `create_notebook` and `add_notebook_entry` for all detailed investigation documentation.
 - **Workflow**: Create a case for tracking → Create a notebook for the investigation → Link them. Post detailed findings to the notebook, post brief status updates to the case wall.
 
+## SOAR (response automation)
+
+Use the SOAR tools only when the analyst asks to automate or run a response. Follow the `soar_workflow` prompt or `skills/soar-automation`:
+- `get_soar_settings` first. If SOAR is disabled, a human admin enables it in nano. Do not work around that.
+- Dry run (`dry_run=true`) every action or flow run, show the user the rendered steps, and only then do a live run with `user_confirmed=true`. Get approval for that exact action, connection and inputs.
+- Every pack, connection or flow write needs `user_confirmed=true` after explicit approval. Setting a flow to `live` arms automatic triggers.
+- Credentials are write-only. Ask the user for them, send them once, and never repeat them or write them to notebooks or case walls.
+- Approvals are decided by humans in nano. Never claim one happened.
+
 ## Notebook Entry Content Schemas
 
 Each `add_notebook_entry` type requires a specific content structure. **Do not** put free text into types that expect structured fields — the frontend will show "undefined" or "Invalid Date".

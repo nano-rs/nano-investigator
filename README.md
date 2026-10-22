@@ -58,7 +58,7 @@ Or add to your Claude Code settings (`~/.claude/settings.json`):
 > hunt for lateral movement in the last 7 days
 ```
 
-## Tools (67)
+## Tools (115)
 
 | Category | Count | Tools |
 |----------|-------|-------|
@@ -73,10 +73,13 @@ Or add to your Claude Code settings (`~/.claude/settings.json`):
 | **MITRE ATT&CK** | 2 | `get_mitre_technique` `get_mitre_coverage` |
 | **System** | 4 | `get_source_types` `get_org_context` `health_check` `get_audit_trail` |
 | **Ingestion diagnostics** | 18 | `list_pipelines` `get_pipeline` `explain_pipeline` `list_log_sources` `get_log_source` `list_parser_repositories` `get_parser_repository_sync_status` `browse_parser_repository` `get_repository_parser` `list_data_sources` `get_connector_status` `get_onboarding_status` `get_add_data_guidance` `get_log_source_health` `get_pipeline_releases` `get_pipeline_inputs` `get_add_data_status` `get_ingest_credential_activity` |
+| **SOAR** | 26 | `get_soar_settings` `list_soar_packs` `get_soar_pack` `install_soar_pack` `upgrade_soar_pack` `remove_soar_pack` `list_soar_actions` `list_soar_connections` `get_soar_connection` `create_soar_connection` `update_soar_connection` `test_soar_connection` `remove_soar_connection` `run_soar_action` `list_soar_flows` `get_soar_flow` `validate_soar_flow` `create_soar_flow` `update_soar_flow` `remove_soar_flow` `run_soar_flow` `list_soar_runs` `get_soar_run` `cancel_soar_run` `list_soar_approvals` `get_soar_approval` |
 
 Ingestion tools read the same pipeline, Add data, onboarding and synced parser repository state as nano Desktop. Use `get_pipeline_inputs` to map a feed label to a pipeline, `explain_pipeline` for routes/inputs/runtime capabilities, and `get_pipeline_releases` to distinguish a saved draft from an applied release. Push activity separates edge receipt from lake searchability; cloud pull verification and connector collection have independent status. Unknown telemetry is never healthy by default.
 
 Pipeline authoring uses `create_pipeline`, `update_pipeline_draft`, `preview_pipeline`, `review_pipeline_release`, `publish_pipeline_release` and `rollback_pipeline_release`, aligned with nanodac (NAN-4013). Draft updates require `expected_updated_at`; publish requires an unchanged reviewed `plan_revision` and explicit `user_confirmed` approval. These tools are marked WRITE and carry API permission requirements. Investigator no longer exposes the old ingress deploy, credential import, or parser publish shortcuts. Read-only tool names and schemas align with nanodac (NAN-4014); configure one ingestion tool provider per client to avoid duplicate names. Repository reads inspect the synced catalog, branch, sync status and import linkage; hosted catalogs may still be setting up. No connect-repository flow is required. See [the capability matrix](docs/ingestion-capability-matrix.md).
+
+SOAR tools (enterprise) map 1:1 to the tenant `/api/soar/*` API, using the OpenAPI contract vendored in `packages/core/src/fixtures/soar-openapi.json`. Reads are safe. Pack, connection and flow writes, connection tests and run cancellation refuse without `user_confirmed=true`. `run_soar_action` and `run_soar_flow` have external side effects: run them with `dry_run=true` first (requests are rendered, nothing is sent), and a live run needs confirmation. Connection credentials are write-only. They are sent once, never returned, and redacted from every output and error. Enabling SOAR and deciding approvals need an interactive human session in nano, so these tools do not expose them. Confirmation metadata is published per tool under `_meta["io.nano/confirmation"]`. The `soar_workflow` prompt and `skills/soar-automation` describe the workflow.
 
 ## Resources & Prompts
 
@@ -92,6 +95,7 @@ Pipeline authoring uses `create_pipeline`, `update_pipeline_draft`, `preview_pip
 - `hunt_campaign` -- Proactive campaign hunting
 - `morning_briefing` -- SOC shift handoff
 - `build_parser` -- Inspect pipeline state and guide draft → preview → release → rollback with the aligned pipeline tools
+- `soar_workflow` -- Build and run SOAR automation: pack → connection → test → dry run → confirmed run, or a flow with triggers
 
 ## Project Structure
 

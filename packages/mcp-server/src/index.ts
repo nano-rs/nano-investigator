@@ -83,6 +83,7 @@ import { TOOLS as ENRICHMENT_TOOLS, handleEnrichmentTool } from './tools/enrichm
 import { TOOLS as MITRE_TOOLS, handleMitreTool } from './tools/mitre.js';
 import { TOOLS as SYSTEM_TOOLS, handleSystemTool } from './tools/system.js';
 import { TOOLS as RECON_TOOLS, handleReconTool } from './tools/recon.js';
+import { TOOLS as SOAR_TOOLS, handleSoarTool } from './tools/soar.js';
 import { withPermissionRequirements } from './tool-permissions.js';
 
 import { INGESTION_TOOLS, handleIngestionTool } from './tools/ingestion.js';
@@ -99,6 +100,7 @@ import { INVESTIGATE_PROMPT, getInvestigatePrompt } from './prompts/investigate.
 import { HUNT_ENTITY_PROMPT, HUNT_CAMPAIGN_PROMPT, getHuntEntityPrompt, getHuntCampaignPrompt } from './prompts/hunt.js';
 import { MORNING_BRIEFING_PROMPT, getMorningBriefingPrompt } from './prompts/triage.js';
 import { BUILD_PARSER_PROMPT, getBuildParserPrompt } from './prompts/build-parser.js';
+import { SOAR_WORKFLOW_PROMPT, getSoarWorkflowPrompt } from './prompts/soar.js';
 
 // ==================== Tool Registry ====================
 
@@ -116,6 +118,7 @@ const ALL_TOOLS = withPermissionRequirements([
   ...SYSTEM_TOOLS,
   ...INGESTION_TOOLS,
   ...RECON_TOOLS,
+  ...SOAR_TOOLS,
 ]);
 
 // Map tool names to their category handler
@@ -131,6 +134,7 @@ const ENRICHMENT_TOOL_NAMES = new Set(ENRICHMENT_TOOLS.map((t) => t.name));
 const MITRE_TOOL_NAMES = new Set(MITRE_TOOLS.map((t) => t.name));
 const SYSTEM_TOOL_NAMES = new Set(SYSTEM_TOOLS.map((t) => t.name));
 const RECON_TOOL_NAMES = new Set(RECON_TOOLS.map((t) => t.name));
+const SOAR_TOOL_NAMES = new Set(SOAR_TOOLS.map((t) => t.name));
 
 const INGESTION_TOOL_NAMES = new Set(INGESTION_TOOLS.map((t) => t.name));
 
@@ -200,6 +204,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (SYSTEM_TOOL_NAMES.has(name)) return handleSystemTool(name, toolArgs, client);
   if (INGESTION_TOOL_NAMES.has(name)) return handleIngestionTool(name, toolArgs, client);
   if (RECON_TOOL_NAMES.has(name)) return handleReconTool(name, toolArgs, client);
+  if (SOAR_TOOL_NAMES.has(name)) return handleSoarTool(name, toolArgs, client);
 
   return {
     content: [{ type: 'text', text: `Unknown tool: ${name}` }],
@@ -261,7 +266,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
 
 // ==================== Prompt Handlers ====================
 
-const ALL_PROMPTS = [INVESTIGATE_PROMPT, HUNT_ENTITY_PROMPT, HUNT_CAMPAIGN_PROMPT, MORNING_BRIEFING_PROMPT, BUILD_PARSER_PROMPT];
+const ALL_PROMPTS = [INVESTIGATE_PROMPT, HUNT_ENTITY_PROMPT, HUNT_CAMPAIGN_PROMPT, MORNING_BRIEFING_PROMPT, BUILD_PARSER_PROMPT, SOAR_WORKFLOW_PROMPT];
 
 server.setRequestHandler(ListPromptsRequestSchema, async () => ({
   prompts: ALL_PROMPTS,
@@ -282,6 +287,8 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
       return getMorningBriefingPrompt(promptArgs);
     case 'build_parser':
       return getBuildParserPrompt(promptArgs);
+    case 'soar_workflow':
+      return getSoarWorkflowPrompt(promptArgs);
     default:
       throw new Error(`Unknown prompt: ${name}`);
   }

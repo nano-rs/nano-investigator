@@ -245,7 +245,134 @@ export const TOOL_PERMISSION_REQUIREMENTS: Record<
     'hunt_save_profile',
     'hunt_propose_drafts',
   ]),
+
+  // SOAR (NAN-4375) — aligned with nanosiem-enterprise handlers/soar.rs
+  // `fence()` and each handler's `admit*` scope. Every route also needs the
+  // tenant's SOAR entitlement and SOAR enabled (except settings, run/approval
+  // history and cleanup), which are tenant state, not caller scopes.
+  get_soar_settings: allOf('soar:view'),
+  list_soar_packs: allOf('soar:view'),
+  get_soar_pack: allOf('soar:view'),
+  list_soar_actions: allOf('soar:view'),
+  install_soar_pack: allOf('soar:manage'),
+  upgrade_soar_pack: allOf('soar:manage'),
+  remove_soar_pack: allOf('soar:manage'),
+  list_soar_connections: alternatives(
+    { allOf: ['soar:view'], when: 'SOAR enabled and entitled: full connection metadata' },
+    {
+      allOf: ['soar:manage'],
+      when: 'SOAR off or entitlement lapsed: sanitized cleanup metadata only',
+    },
+  ),
+  get_soar_connection: allOf('soar:view'),
+  create_soar_connection: allOf('soar:manage'),
+  update_soar_connection: allOf('soar:manage'),
+  test_soar_connection: allOf('soar:manage'),
+  remove_soar_connection: allOf('soar:manage'),
+  run_soar_action: alternatives(
+    { allOf: ['soar:run'], when: 'no case_id' },
+    {
+      allOf: ['soar:run', 'cases:view', 'cases:comment'],
+      when: 'case_id links the run to a case (results post to its wall)',
+    },
+  ),
+  list_soar_flows: allOf('soar:view'),
+  get_soar_flow: allOf('soar:view'),
+  validate_soar_flow: allOf('soar:manage'),
+  create_soar_flow: allOf('soar:manage'),
+  update_soar_flow: allOf('soar:manage'),
+  remove_soar_flow: allOf('soar:manage'),
+  run_soar_flow: alternatives(
+    { allOf: ['soar:run'], when: 'no case_id' },
+    {
+      allOf: ['soar:run', 'cases:view', 'cases:comment'],
+      when: 'case_id links the run to a case (results post to its wall)',
+    },
+  ),
+  // Case-linked runs and approvals are visible only with cases:view.
+  list_soar_runs: allOf('soar:view'),
+  get_soar_run: allOf('soar:view'),
+  cancel_soar_run: allOf('soar:run'),
+  list_soar_approvals: allOf('soar:view'),
+  get_soar_approval: allOf('soar:view'),
 };
+
+// ==================== Confirmation ====================
+
+export const CONFIRMATION_META_KEY = 'io.nano/confirmation';
+
+/**
+ * - `write`: changes tenant state (install a pack, store a connection, save a
+ *   flow, cancel a run). Ask the user first.
+ * - `external_side_effect`: MUTATING — sends requests to a third-party system
+ *   (contain a host, disable a user). Ask the user first; a dry run, where the
+ *   API offers one, renders the requests without sending and needs no
+ *   confirmation.
+ */
+export type ToolEffect = 'write' | 'external_side_effect';
+
+export interface ToolConfirmation {
+  version: 1;
+  effect: ToolEffect;
+  /** The tool refuses unless this argument is literally `true`. */
+  argument: 'user_confirmed';
+  /** Removes tenant state that is not recoverable through the tool. */
+  destructive?: boolean;
+  /** When this argument is `true`, nothing external is sent and confirmation is not required. */
+  dryRunArgument?: 'dry_run';
+}
+
+const confirm = (
+  effect: ToolEffect,
+  extra: Partial<Pick<ToolConfirmation, 'destructive' | 'dryRunArgument'>> = {},
+): ToolConfirmation => ({ version: 1, effect, argument: 'user_confirmed', ...extra });
+
+/**
+ * Tools that refuse to run without explicit user confirmation. Every tool NOT
+ * listed here is either a read (safe) or a pre-existing write governed by its
+ * own description. Desktop and other clients can render the confirmation from
+ * this metadata; the handler enforces it regardless of client.
+ */
+export const TOOL_CONFIRMATIONS: Record<string, ToolConfirmation> = {
+  // Ingestion (pre-existing user_confirmed gates)
+  publish_pipeline_release: confirm('write'),
+  rollback_pipeline_release: confirm('write'),
+
+  // SOAR
+  install_soar_pack: confirm('write'),
+  upgrade_soar_pack: confirm('write'),
+  remove_soar_pack: confirm('write', { destructive: true }),
+  create_soar_connection: confirm('write'),
+  update_soar_connection: confirm('write'),
+  // Calls the vendor with the stored credentials (the pack's read-only test action).
+  test_soar_connection: confirm('write'),
+  remove_soar_connection: confirm('write', { destructive: true }),
+  create_soar_flow: confirm('write'),
+  update_soar_flow: confirm('write'),
+  remove_soar_flow: confirm('write', { destructive: true }),
+  cancel_soar_run: confirm('write'),
+  run_soar_action: confirm('external_side_effect', { dryRunArgument: 'dry_run' }),
+  run_soar_flow: confirm('external_side_effect', { dryRunArgument: 'dry_run' }),
+};
+
+/** The refusal message when a confirmation-gated call lacks confirmation, else undefined. */
+export function missingConfirmation(
+  tool: string,
+  args: Record<string, unknown>,
+): string | undefined {
+  const rule = TOOL_CONFIRMATIONS[tool];
+  if (!rule) return undefined;
+  if (rule.dryRunArgument && args[rule.dryRunArgument] === true) return undefined;
+  if (args[rule.argument] === true) return undefined;
+  const what =
+    rule.effect === 'external_side_effect'
+      ? 'This sends real requests to an external system.'
+      : 'This changes workspace state.';
+  const dry = rule.dryRunArgument
+    ? ` Run with ${rule.dryRunArgument}=true first to preview without sending.`
+    : '';
+  return `${what} Describe exactly what will happen, ask the user, and retry with ${rule.argument}=true only after they explicitly approve.${dry}`;
+}
 
 type ToolDefinition = {
   name: string;
@@ -262,11 +389,13 @@ export function withPermissionRequirements<T extends ToolDefinition>(
       throw new Error(`Missing permission requirements for MCP tool "${tool.name}"`);
     }
 
+    const confirmation = TOOL_CONFIRMATIONS[tool.name];
     return {
       ...tool,
       _meta: {
         ...tool._meta,
         [PERMISSION_REQUIREMENTS_META_KEY]: requirements,
+        ...(confirmation ? { [CONFIRMATION_META_KEY]: confirmation } : {}),
       },
     };
   });

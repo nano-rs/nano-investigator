@@ -13,8 +13,12 @@ import { TOOLS as RECON_TOOLS } from './tools/recon.js';
 import { TOOLS as RISK_TOOLS } from './tools/risk.js';
 import { TOOLS as SEARCH_TOOLS } from './tools/search.js';
 import { TOOLS as SYSTEM_TOOLS } from './tools/system.js';
+import { TOOLS as SOAR_TOOLS } from './tools/soar.js';
 import {
+  CONFIRMATION_META_KEY,
   PERMISSION_REQUIREMENTS_META_KEY,
+  TOOL_CONFIRMATIONS,
+  missingConfirmation,
   TOOL_PERMISSION_REQUIREMENTS,
   withPermissionRequirements,
 } from './tool-permissions.js';
@@ -33,6 +37,7 @@ const ALL_TOOLS = [
   ...SYSTEM_TOOLS,
   ...INGESTION_TOOLS,
   ...RECON_TOOLS,
+  ...SOAR_TOOLS,
 ];
 
 describe('tool permission metadata', () => {
@@ -84,5 +89,30 @@ describe('tool permission metadata', () => {
         { allOf: ['settings:ai'], when: 'legacy AI settings authority' },
       ],
     });
+  });
+
+  it('gates exactly the tools that take user_confirmed, and publishes the gate', () => {
+    const takesConfirmation = ALL_TOOLS.filter((tool) =>
+      Object.hasOwn((tool.inputSchema as { properties?: object }).properties ?? {}, 'user_confirmed'),
+    ).map((tool) => tool.name);
+    expect(Object.keys(TOOL_CONFIRMATIONS).sort()).toEqual(takesConfirmation.sort());
+    for (const tool of withPermissionRequirements(ALL_TOOLS)) {
+      expect(tool._meta[CONFIRMATION_META_KEY]).toEqual(TOOL_CONFIRMATIONS[tool.name]);
+    }
+  });
+
+  it('requires confirmation unless the call is a dry run', () => {
+    expect(missingConfirmation('run_soar_action', {})).toMatch(/external system/);
+    expect(missingConfirmation('run_soar_action', { dry_run: true })).toBeUndefined();
+    expect(missingConfirmation('run_soar_action', { user_confirmed: true })).toBeUndefined();
+    expect(missingConfirmation('install_soar_pack', { dry_run: true })).toMatch(/workspace state/);
+    expect(missingConfirmation('list_soar_packs', {})).toBeUndefined();
+  });
+
+  it('needs case scopes only when a SOAR run links a case', () => {
+    expect(TOOL_PERMISSION_REQUIREMENTS.run_soar_action.alternatives).toEqual([
+      { allOf: ['soar:run'], when: 'no case_id' },
+      { allOf: ['soar:run', 'cases:view', 'cases:comment'], when: 'case_id links the run to a case (results post to its wall)' },
+    ]);
   });
 });

@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { ToolResult } from "./utils.js";
+import { redact } from "./redaction.js";
 import type { NanosiemClient } from "@nano-rs/investigator-core";
 // Read contracts align with nanodac 8196fa2; lifecycle schemas/implementation align with NAN-4013 (7a74377).
 /** Ingestion tools use fixed workspace API routes and the caller's scoped key. */
@@ -264,46 +265,6 @@ const success = (value: unknown): ToolResult => {
   if (Buffer.byteLength(text, 'utf8') > 2 * 1024 * 1024) return failure('Ingestion result exceeds 2 MiB. Narrow the inventory or inspect one source.');
   return { content: [{ type: 'text', text }] };
 };
-const sensitive = (key: string) =>
-  /(?:password|secret|token|apikey|authorization|privatekey|vendorcredentials|revealpublickey)/i.test(
-    key.replace(/[^a-z0-9]/gi, ""),
-  ) || ["credentials", "credential", "sealed_token", "sealed_payload"].includes(key.toLowerCase());
-function cleanText(value: string): string {
-  return value
-    .replace(
-      /-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g,
-      "[REDACTED PRIVATE KEY]",
-    )
-    .replace(
-      /((?:password|secret|api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret)[\"']?\s*[:=]\s*)(?:\"[^\"]*\"|'[^']*'|[^\s,;}]+)/gi,
-      "$1[REDACTED]",
-    )
-    .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+/gi, "Bearer [REDACTED]")
-    .replace(/https?:\/\/[^\s"'<>]+/g, (raw) => {
-      try {
-        const url = new URL(raw);
-        url.username = "";
-        url.password = "";
-        for (const key of [...url.searchParams.keys()])
-          if (sensitive(key)) url.searchParams.set(key, "[REDACTED]");
-        return url.toString();
-      } catch {
-        return "[invalid URL]";
-      }
-    });
-}
-function redact(value: unknown, depth = 0): unknown {
-  if (depth > 16) return "[depth limit]";
-  if (typeof value === "string") return cleanText(value);
-  if (Array.isArray(value)) return value.map((item) => redact(item, depth + 1));
-  if (value && typeof value === "object")
-    return Object.fromEntries(
-      Object.entries(value)
-        .filter(([key]) => !sensitive(key))
-        .map(([key, item]) => [key, redact(item, depth + 1)]),
-    );
-  return value;
-}
 function object(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)

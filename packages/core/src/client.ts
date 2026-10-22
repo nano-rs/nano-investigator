@@ -116,6 +116,29 @@ import type {
   // Hunt recon
   SaveHuntProfileRequest,
   ProposeHuntDraftsRequest,
+  // SOAR
+  SoarSettings,
+  SoarPacks,
+  SoarConnection,
+  SoarConnections,
+  SoarCreateConnection,
+  SoarUpdateConnection,
+  SoarTestResult,
+  SoarRunRequest,
+  SoarRun,
+  SoarRuns,
+  SoarRunDetail,
+  SoarRunDetailQuery,
+  SoarApproval,
+  SoarApprovals,
+  SoarApprovalQuery,
+  SoarFlow,
+  SoarFlows,
+  SoarCreateFlow,
+  SoarUpdateFlow,
+  SoarFlowValidation,
+  SoarRunFlow,
+  SoarDeleted,
 } from './types.js';
 
 export interface NanosiemClientConfig {
@@ -178,8 +201,8 @@ export class NanosiemClient {
       timeoutMs?: number;
     }
   ): Promise<ApiResponse<T>> {
-    if (this.deployment === 'open-core' && /^\/api\/(cases|notebooks|risk|entities|threat-intel)(?:\/|$)/.test(path)) {
-      return { success: false, error: { code: 'NOT_AVAILABLE', message: 'This feature is not available in open core (cases, notebooks, risk, entity context and tenant threat intelligence require hosted enterprise). Use alerts, search and prevalence for investigation.' } };
+    if (this.deployment === 'open-core' && /^\/api\/(cases|notebooks|risk|entities|threat-intel|soar)(?:\/|$)/.test(path)) {
+      return { success: false, error: { code: 'NOT_AVAILABLE', message: 'This feature is not available in open core (cases, notebooks, risk, entity context, tenant threat intelligence and SOAR require hosted enterprise). Use alerts, search and prevalence for investigation.' } };
     }
     if (this.deployment === 'hosted' && path === '/api/search/sql') {
       return { success: false, error: { code: 'NOT_AVAILABLE', message: 'Raw SQL is not available for hosted tenants. Use search with nPL and canonical OCSF fields.' } };
@@ -1049,5 +1072,121 @@ export class NanosiemClient {
   /** Create DRAFT hunts — disabled, unscheduled — one per proposal. */
   async proposeHuntDrafts(req: ProposeHuntDraftsRequest): Promise<ApiResponse<unknown>> {
     return this.request<unknown>('POST', '/api/hunts/drafts', req);
+  }
+
+  // ==================== SOAR (tenant /api/soar/*, NAN-4375) ====================
+  //
+  // Contract: fixtures/soar-openapi.json. Credential values are write-only —
+  // they are sent in create/update bodies and no response carries them.
+  // Read routes with `deny_unknown_fields` query structs (run detail,
+  // approvals) must not carry extra parameters; nothing here appends any.
+
+  /** Settings stay readable while SOAR is disabled. Enabling needs a human session. */
+  async getSoarSettings(): Promise<ApiResponse<SoarSettings>> {
+    return this.request<SoarSettings>('GET', '/api/soar/settings');
+  }
+
+  /** Catalog packs visible to this tenant, with installed/enabled state. */
+  async listSoarPacks(): Promise<ApiResponse<SoarPacks>> {
+    return this.request<SoarPacks>('GET', '/api/soar/packs');
+  }
+
+  /** One pack; the response keeps the list envelope (`packs: [pack]`). */
+  async getSoarPack(name: string): Promise<ApiResponse<SoarPacks>> {
+    return this.request<SoarPacks>('GET', `/api/soar/packs/${this.encodeId(name)}`);
+  }
+
+  async installSoarPack(name: string, version: string): Promise<ApiResponse<SoarPacks>> {
+    return this.request<SoarPacks>('POST', `/api/soar/packs/${this.encodeId(name)}/install`, { version });
+  }
+
+  async upgradeSoarPack(name: string, version: string): Promise<ApiResponse<SoarPacks>> {
+    return this.request<SoarPacks>('POST', `/api/soar/packs/${this.encodeId(name)}/upgrade`, { version });
+  }
+
+  async removeSoarPack(name: string): Promise<ApiResponse<SoarDeleted>> {
+    return this.request<SoarDeleted>('DELETE', `/api/soar/packs/${this.encodeId(name)}`);
+  }
+
+  async listSoarConnections(): Promise<ApiResponse<SoarConnections>> {
+    return this.request<SoarConnections>('GET', '/api/soar/connections');
+  }
+
+  async getSoarConnection(id: string): Promise<ApiResponse<SoarConnection>> {
+    return this.request<SoarConnection>('GET', `/api/soar/connections/${this.encodeId(id)}`);
+  }
+
+  async createSoarConnection(req: SoarCreateConnection): Promise<ApiResponse<SoarConnection>> {
+    return this.request<SoarConnection>('POST', '/api/soar/connections', req);
+  }
+
+  async updateSoarConnection(id: string, req: SoarUpdateConnection): Promise<ApiResponse<SoarConnection>> {
+    return this.request<SoarConnection>('PUT', `/api/soar/connections/${this.encodeId(id)}`, req);
+  }
+
+  async removeSoarConnection(id: string): Promise<ApiResponse<SoarDeleted>> {
+    return this.request<SoarDeleted>('DELETE', `/api/soar/connections/${this.encodeId(id)}`);
+  }
+
+  /** Runs the pack's read-only test action. The server bounds it at 20s. */
+  async testSoarConnection(id: string, inputs: Record<string, unknown> = {}): Promise<ApiResponse<SoarTestResult>> {
+    return this.request<SoarTestResult>('POST', `/api/soar/connections/${this.encodeId(id)}/test`, { inputs });
+  }
+
+  /** Queue one action. 202 + the queued run; `dry_run` renders requests without sending them. */
+  async queueSoarAction(req: SoarRunRequest): Promise<ApiResponse<SoarRun>> {
+    return this.request<SoarRun>('POST', '/api/soar/actions/run', req);
+  }
+
+  async listSoarRuns(params?: { limit?: number; offset?: number }): Promise<ApiResponse<SoarRuns>> {
+    return this.request<SoarRuns>('GET', '/api/soar/runs', undefined, { query: params });
+  }
+
+  async getSoarRun(id: string, params?: SoarRunDetailQuery): Promise<ApiResponse<SoarRunDetail>> {
+    return this.request<SoarRunDetail>('GET', `/api/soar/runs/${this.encodeId(id)}`, undefined, {
+      query: params as Record<string, number | undefined> | undefined,
+    });
+  }
+
+  async cancelSoarRun(id: string): Promise<ApiResponse<SoarRun>> {
+    return this.request<SoarRun>('POST', `/api/soar/runs/${this.encodeId(id)}/cancel`);
+  }
+
+  async listSoarFlows(): Promise<ApiResponse<SoarFlows>> {
+    return this.request<SoarFlows>('GET', '/api/soar/flows');
+  }
+
+  async getSoarFlow(id: string): Promise<ApiResponse<SoarFlow>> {
+    return this.request<SoarFlow>('GET', `/api/soar/flows/${this.encodeId(id)}`);
+  }
+
+  async validateSoarFlow(definition: Record<string, unknown>): Promise<ApiResponse<SoarFlowValidation>> {
+    return this.request<SoarFlowValidation>('POST', '/api/soar/flows/validate', { definition });
+  }
+
+  async createSoarFlow(req: SoarCreateFlow): Promise<ApiResponse<SoarFlow>> {
+    return this.request<SoarFlow>('POST', '/api/soar/flows', req);
+  }
+
+  async updateSoarFlow(id: string, req: SoarUpdateFlow): Promise<ApiResponse<SoarFlow>> {
+    return this.request<SoarFlow>('PUT', `/api/soar/flows/${this.encodeId(id)}`, req);
+  }
+
+  async removeSoarFlow(id: string): Promise<ApiResponse<SoarDeleted>> {
+    return this.request<SoarDeleted>('DELETE', `/api/soar/flows/${this.encodeId(id)}`);
+  }
+
+  async queueSoarFlow(id: string, req: SoarRunFlow): Promise<ApiResponse<SoarRun>> {
+    return this.request<SoarRun>('POST', `/api/soar/flows/${this.encodeId(id)}/run`, req);
+  }
+
+  async listSoarApprovals(params?: SoarApprovalQuery): Promise<ApiResponse<SoarApprovals>> {
+    return this.request<SoarApprovals>('GET', '/api/soar/approvals', undefined, {
+      query: params as Record<string, string | number | undefined> | undefined,
+    });
+  }
+
+  async getSoarApproval(id: string): Promise<ApiResponse<SoarApproval>> {
+    return this.request<SoarApproval>('GET', `/api/soar/approvals/${this.encodeId(id)}`);
   }
 }

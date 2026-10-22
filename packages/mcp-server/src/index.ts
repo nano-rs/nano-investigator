@@ -88,6 +88,9 @@ import { withPermissionRequirements } from './tool-permissions.js';
 
 import { INGESTION_TOOLS, handleIngestionTool } from './tools/ingestion.js';
 
+import { TOOLS as AGENT_LANE_TOOLS, handleAgentLaneTool } from './tools/agent-lane.js';
+import type { AgentToolName } from '@nano-rs/investigator-core';
+
 // Resources
 import { UDM_SCHEMA_RESOURCE, UDM_SCHEMA_CONTENT, UDM_SCHEMA_URI } from './resources/udm-schema.js';
 import { NPL_REFERENCE_RESOURCE, NPL_REFERENCE_CONTENT, NPL_REFERENCE_URI } from './resources/npl-reference.js';
@@ -106,6 +109,7 @@ import { SOAR_WORKFLOW_PROMPT, getSoarWorkflowPrompt } from './prompts/soar.js';
 
 const ALL_TOOLS = withPermissionRequirements([
   ...SEARCH_TOOLS,
+  ...AGENT_LANE_TOOLS,
   ...ALERTS_TOOLS,
   ...CASES_TOOLS,
   ...NOTEBOOKS_TOOLS,
@@ -122,6 +126,7 @@ const ALL_TOOLS = withPermissionRequirements([
 ]);
 
 // Map tool names to their category handler
+const AGENT_LANE_TOOL_NAMES = new Set(AGENT_LANE_TOOLS.map(t => t.name));
 const SEARCH_TOOL_NAMES = new Set(SEARCH_TOOLS.map((t) => t.name));
 const ALERTS_TOOL_NAMES = new Set(ALERTS_TOOLS.map((t) => t.name));
 const CASES_TOOL_NAMES = new Set(CASES_TOOLS.map((t) => t.name));
@@ -191,6 +196,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const toolArgs = (args || {}) as Record<string, unknown>;
   const client = getClient();
 
+  if (AGENT_LANE_TOOL_NAMES.has(name as AgentToolName)) return handleAgentLaneTool(name as AgentToolName, toolArgs, client);
   if (SEARCH_TOOL_NAMES.has(name)) return handleSearchTool(name, toolArgs, client);
   if (ALERTS_TOOL_NAMES.has(name)) return handleAlertsTool(name, toolArgs, client);
   if (CASES_TOOL_NAMES.has(name)) return handleCasesTool(name, toolArgs, client);

@@ -1,3 +1,4 @@
+import { AGENT_WINDOW_GUIDANCE } from './agent-window.js';
 /**
  * Threat hunting prompts — entity hunting and campaign hunting
  */
@@ -37,7 +38,7 @@ export const HUNT_CAMPAIGN_PROMPT = {
     },
     {
       name: 'time_range',
-      description: 'Time range to search (e.g., "-7d", "-30d"). Default: -7d',
+      description: 'Time range to search (e.g., "-7d", "-30d"). Default: -24h',
       required: false,
     },
   ],
@@ -58,13 +59,15 @@ export function getHuntEntityPrompt(args: Record<string, string | undefined>): {
         role: 'user',
         content: {
           type: 'text',
-          text: `You are hunting for activity related to entity: ${entity} (type: ${entityType})
+          text: `${AGENT_WINDOW_GUIDANCE}
+
+You are hunting for activity related to entity: ${entity} (type: ${entityType})
 Time range: ${timeRange}
 
 ## Phase 1 — Context (run these in parallel where possible)
 - get_entity_context for ${entity}
 - ${entityType === 'ip' ? `lookup_ip("${entity}") for GeoIP/ASN` : `check threat-intel matches via search (the ioc_matched / ioc_threat_type / ioc_confidence columns are populated at ingest)`}
-- get_prevalence to understand how common this entity is
+- prevalence(values[]) to understand how common this entity is
 - search for all activity involving this entity in the last ${timeRange}
 
 ## Phase 2 — Assessment
@@ -80,7 +83,7 @@ After gathering context, assess:
 ## Phase 3 — Deep Dive (only the interesting branches)
 Based on entity type:
 
-**Tool choice for Phase 3 queries:** Use search with canonical OCSF fields and bounded time windows. Read get_schema first. Hosted tenants do not expose raw SQL.
+**Tool choice for Phase 3 queries:** Use search with canonical OCSF fields and bounded time windows. Read get_schema first. Use lake_sql for sealed hours and bounded cell feature tools for enrichment.
 
 ${entityType === 'ip' ? `**IP Investigation:**
 - What internal hosts communicated with it? What ports/protocols?
@@ -124,7 +127,7 @@ export function getHuntCampaignPrompt(args: Record<string, string | undefined>):
   messages: Array<{ role: 'user'; content: { type: 'text'; text: string } }>;
 } {
   const description = args.description ?? 'unknown threat';
-  const timeRange = args.time_range ?? '-7d';
+  const timeRange = args.time_range ?? '-24h';
 
   return {
     description: `Hunt campaign: ${description}`,
@@ -133,7 +136,9 @@ export function getHuntCampaignPrompt(args: Record<string, string | undefined>):
         role: 'user',
         content: {
           type: 'text',
-          text: `You are conducting a proactive threat hunt for: ${description}
+          text: `${AGENT_WINDOW_GUIDANCE}
+
+You are conducting a proactive threat hunt for: ${description}
 Time range: ${timeRange}
 
 ## Step 1: PLAN the Hunt

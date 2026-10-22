@@ -1,3 +1,4 @@
+import { AGENT_WINDOW_GUIDANCE } from './agent-window.js';
 /**
  * Triage prompt — SOC shift briefing
  */
@@ -5,11 +6,11 @@
 export const MORNING_BRIEFING_PROMPT = {
   name: 'morning_briefing',
   description:
-    'Generate a SOC shift briefing covering the last 12 hours. Summarizes alert status, case workload, risk landscape, detection health, and environment health. Perfect for shift handoffs.',
+    'Generate a SOC shift briefing covering the last 24 hours. Summarizes alert status, case workload, risk landscape, detection health, and environment health. Perfect for shift handoffs.',
   arguments: [
     {
       name: 'hours',
-      description: 'Hours to look back (default: 12)',
+      description: 'Hours to look back (default: 24)',
       required: false,
     },
   ],
@@ -19,7 +20,7 @@ export function getMorningBriefingPrompt(args: Record<string, string | undefined
   description: string;
   messages: Array<{ role: 'user'; content: { type: 'text'; text: string } }>;
 } {
-  const hours = args.hours ?? '12';
+  const hours = args.hours ?? '24';
 
   return {
     description: `SOC shift briefing (last ${hours}h)`,
@@ -28,7 +29,9 @@ export function getMorningBriefingPrompt(args: Record<string, string | undefined
         role: 'user',
         content: {
           type: 'text',
-          text: `Generate a SOC shift briefing covering the last ${hours} hours.
+          text: `${AGENT_WINDOW_GUIDANCE}
+
+Generate a SOC shift briefing covering the last ${hours} hours.
 
 Gather data in parallel where possible, then present a concise briefing.
 

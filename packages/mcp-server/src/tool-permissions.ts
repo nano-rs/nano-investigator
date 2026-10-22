@@ -68,6 +68,13 @@ export const TOOL_PERMISSION_REQUIREMENTS: Record<
   string,
   ToolPermissionRequirements
 > = {
+  // Agent lane (same authorization as the existing API endpoints).
+  lake_sql: allOf('search:execute'),
+  prevalence: allOf('prevalence:view'),
+  risk_scores: allOf('risk:view', 'detections:view'),
+  resolve_identity: allOf('enrichments:view'),
+  lookup: alternatives({ allOf: ['lookup:view'], when: 'lookup table mode' }, { allOf: ['enrichments:view', 'search:execute'], when: 'ioc snapshot mode' }),
+
   // Search
   search: allOf('search:execute'),
   search_sql: allOf('search:sql'),

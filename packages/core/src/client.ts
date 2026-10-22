@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import { executeAgentTool, type AgentToolName, type AgentToolResponse } from './agent-lane.js';
+import { createHash, randomUUID } from "node:crypto";
 /**
  * nano API client for SOC operations
  *
@@ -161,6 +162,7 @@ export interface ApiResponse<T> {
 }
 
 export class NanosiemClient {
+  private agentSession = `nano-investigator/0.3.0; session=${randomUUID()}`;
   private apiUrl: string;
   private searchUrl: string;
   private apiKey: string;
@@ -181,6 +183,11 @@ export class NanosiemClient {
     this.deployment = config.deployment ?? (new URL(this.apiUrl).hostname === 'us.nano.rs' ? 'hosted' : undefined);
   }
 
+  /** The five bounded agent lane tools, shared by MCP and Desktop pivt. */
+  async agentTool(name: AgentToolName, args: Record<string, unknown>): Promise<ApiResponse<AgentToolResponse>> {
+    return executeAgentTool((method, path, body, opts) => this.request(method, path, body, opts), name, args, this.agentSession);
+  }
+
   /** Encode a path segment to prevent path traversal */
   private encodeId(id: string): string {
     return encodeURIComponent(id);
@@ -192,6 +199,8 @@ export class NanosiemClient {
     body?: unknown,
     opts?: {
       useSearchUrl?: boolean;
+      originOnly?: boolean;
+      agent?: string;
       query?: Record<string, string | number | boolean | undefined>;
       /**
        * Per-call override of the client timeout. For endpoints whose own
@@ -223,7 +232,7 @@ export class NanosiemClient {
     const timeout = opts?.timeoutMs ?? this.timeout;
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-    const baseUrl = opts?.useSearchUrl ? this.searchUrl : this.apiUrl;
+    const baseUrl = opts?.originOnly ? new URL(this.apiUrl).origin : (opts?.useSearchUrl ? this.searchUrl : this.apiUrl);
 
     let url = `${baseUrl}${path}`;
     if (opts?.query) {
@@ -241,6 +250,7 @@ export class NanosiemClient {
       const response = await fetch(url, {
         method,
         headers: {
+          ...(opts?.agent ? { 'X-Nano-Agent': opts.agent } : {}),
           'Content-Type': 'application/json',
           'X-API-Key': this.apiKey,
           'User-Agent': 'curl/8.0.0 nano-investigator',

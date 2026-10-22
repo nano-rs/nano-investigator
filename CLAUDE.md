@@ -4,11 +4,12 @@
 
 ## Time Range Defaults
 
-- **Broad/exploratory queries**: Default to `-1d` (e.g. "what has this user been up to?", "show me top domains")
-- **Targeted IOC/entity lookups**: Up to `-7d` if needed
-- **Aggregation/stats queries**: Up to `-7d` is fine since they're lightweight
-- **Only go beyond -7d** if the analyst explicitly requests it or a narrower search returned 0 results
-- **Never default to -30d** — it's too broad and slow for most investigations
+- All agent lane tools (`lake_sql`, `prevalence`, `risk_scores`, `resolve_identity`, `lookup`) take `start` and `end`; default last 24h, or case alert ±1h with `case_context`.
+- Named dates are literal: 10/16 means that day's local midnight to the next midnight in the analyst's IANA time zone. Never substitute rolling 24h for an explicit date.
+- Echo the absolute window and time zone in every answer. Wider than 7d requires a visible `widen_reason`.
+- Empty/thin results: offer 24h → 7d → 30d; never silently widen or retry a charged query. Case first-seen lookbacks may widen for a stated case reason, each as its own visible step.
+- `resolve_identity` is an as-of IP match: pass the event timestamp, or the window end. Report `observed_at`. Only directory attributes and lookup tables are current snapshots.
+- Use `lake_sql` only for sealed hours, one source table per query with `WHERE {window}` and no custom time predicate. Recent unsealed hours stay on nPL `search`. Prefer `prevalence` and `risk_scores` over raw scans for those features.
 
 ## Query Building Rules
 
@@ -21,7 +22,7 @@
   metadata.event_code=4625                                         ← slow (scans all source types)
   ```
 - **Use canonical OCSF 1.9 field paths** — call `get_schema` before constructing queries. Common fields: `actor.user.name`, `src_endpoint.ip`, `dst_endpoint.ip`, `device.hostname`, `metadata.log_source`, `process.file.path`, `process.cmd_line`, `time`, `class_uid`, `activity_id`. Use `get_field_values` to confirm observed values. Do not invent fields or assume every source populates them.
-- **Deployment capabilities** — hosted raw SQL is unavailable; use nPL. Open core has alerts, search and prevalence; cases, notebooks, risk and entity-context endpoints require enterprise. Report unavailable capabilities clearly.
+- **Deployment capabilities** — hosted legacy `search_sql` is unavailable; use nPL for fresh data and `lake_sql` for sealed hours. Open core has alerts, search and prevalence; cases, notebooks, risk and entity-context endpoints require enterprise. Report unavailable capabilities clearly.
 
 - **Free text search** — Just search the term: `connection refused`, `svchost.exe`
 - **Field searches** — `src_endpoint.ip="10.0.0.1"`, `actor.user.name=admin`, `status=500`
@@ -72,7 +73,7 @@ Use observed OCSF identities (`src_endpoint.ip`, `dst_endpoint.ip`, `device.host
 ## Query Refinement Protocol
 
 After every search, evaluate the results:
-- **0 results** → Check field values (get_field_values). Check source_type exists. Widen time range.
+- **0 results** → Check field values (get_field_values) and source availability. Offer the next time range; never silently widen.
 - **1-100 results** → Good. Analyze directly.
 - **100-1000** → Summarize with stats, drill down on interesting groups.
 - **1000-10000** → Too many. Add filters, narrow time, use stats aggregation.

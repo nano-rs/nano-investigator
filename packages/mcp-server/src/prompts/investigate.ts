@@ -1,3 +1,4 @@
+import { AGENT_WINDOW_GUIDANCE } from './agent-window.js';
 /**
  * Alert investigation prompt
  */
@@ -34,7 +35,9 @@ export function getInvestigatePrompt(args: Record<string, string | undefined>): 
         role: 'user',
         content: {
           type: 'text',
-          text: `You are investigating alert ${alertId} from nano.
+          text: `${AGENT_WINDOW_GUIDANCE}
+
+You are investigating alert ${alertId} from nano.
 
 Investigation depth: ${depth}
 
@@ -52,13 +55,13 @@ Follow this investigation process:
 4. **ENRICH** key entities — for each IP, actor.user.name, or host in the matched events:
    - Call get_entity_context to get risk score, alert history, and activity summary
    - For external IPs, call lookup_ip for GeoIP; for threat intel, check the ioc_matched / ioc_threat_type / ioc_confidence columns in search results (populated at ingest)
-   - For hashes/domains, check prevalence with get_prevalence
+   - For hashes/domains, check prevalence with prevalence(values[])
 
 5. **SEARCH** for related activity — run 1-2 focused queries to expand context:
    - What else did the alerting entity do around the same time?
    - Are there similar patterns from other entities? Scope that search by the alert's source (\`metadata.log_source=…\`) or class, not a bare \`*\`.
    - Start every query with a source, class, entity or keyword term. A bare \`*\` reads every source and slows every other query; if one is truly needed keep the window to 4h or less.
-   - Tool choice: use search with OCSF field paths; use get_prevalence and get_entity_context for enrichment. Hosted tenants do not expose raw SQL.
+   - Tool choice: use search with OCSF field paths; use get_prevalence and get_entity_context for enrichment. Use lake_sql for sealed hours and bounded cell feature tools for enrichment.
 
 6. **CHECK HISTORY** — call get_related_cases to see if we've investigated this before:
    - If a related case exists, what was the disposition? Was it FP or TP?

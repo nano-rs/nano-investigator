@@ -59,7 +59,7 @@ export async function executeAgentTool(request: AgentRequest, name: AgentToolNam
       const data = available(wrapper.data);
       if (name === 'prevalence') {
         const requested = object(data.requested_window), effective = object(data.effective_window);
-        requireValue(Date.parse(String(requested.start)) === start && Date.parse(String(requested.end)) === end && Date.parse(String(effective.start)) <= start && Date.parse(String(effective.end)) >= end && used.start === effective.start && used.end === effective.end && data.note === 'prevalence counted over whole parts; effective window shown', 'prevalence_window_mismatch');
+        requireValue(pointTimestamp(requested.start).epochNs === BigInt(start) * 1000000n && pointTimestamp(requested.end).epochNs === BigInt(end) * 1000000n && pointTimestamp(effective.start).epochNs <= BigInt(start) * 1000000n && pointTimestamp(effective.end).epochNs >= BigInt(end) * 1000000n && used.start === effective.start && used.end === effective.end && data.note === 'prevalence counted over whole parts; effective window shown', 'prevalence_window_mismatch');
         window = {...requestedWindow, start: String(effective.start), end: String(effective.end), display_start: new Date(String(effective.start)).toLocaleString('en-US', {timeZone: requestedWindow.time_zone}), display_end: new Date(String(effective.end)).toLocaleString('en-US', {timeZone: requestedWindow.time_zone}), origin: 'whole_parts_effective_coverage'};
         coverage = {requested_window: requested, effective_window: effective, note: data.note};
       } else requireValue(used.start === requestedWindow.start && used.end === requestedWindow.end, 'cell_window_mismatch');

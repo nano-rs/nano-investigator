@@ -156,3 +156,9 @@ it('echoes wider whole-part coverage rather than claiming the requested range is
  const result=await client().agentTool('prevalence',{...dates,values:['a.test'],reason:'Verify current rarity.'});
  expect(result.success).toBe(true);expect(result.data?.window).toMatchObject(effective);expect(result.data?.requested_window).toMatchObject({start:requested.start,end:requested.end});expect(result.data?.effective_window).toEqual(effective);
 });
+
+it('refuses a prevalence echo shifted by one microsecond',async()=>{
+ const requested=resolveAgentWindow(dates);
+ vi.stubGlobal('fetch',vi.fn(async (_url,opts)=>{const req=JSON.parse(opts.body);return new Response(JSON.stringify({window:{start:requested.start,end:requested.end,time_zone:req.time_zone,widen_reason:null},data:{data:[{secret:true}],requested_window:{start:'2026-10-16T04:00:00.000001Z',end:requested.end},effective_window:{start:requested.start,end:requested.end},note:'prevalence counted over whole parts; effective window shown'}}));}));
+ const result=await client().agentTool('prevalence',{...dates,values:['a.test'],reason:'Verify current rarity.'});expect(result.success).toBe(false);expect(JSON.stringify(result)).not.toContain('secret');
+});

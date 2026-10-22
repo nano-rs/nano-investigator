@@ -56,3 +56,14 @@ export function resolveAgentWindow(body: Record<string, unknown>, now = Date.now
     display_start: display.format(new Date(start)), display_end: display.format(new Date(end)), origin, widen_reason: reason,
     case_id: context?.case_id as string ?? null, widened: end - start > 7 * DAY };
 }
+
+/** As-of event timestamps retain sub-millisecond precision supported by the API. */
+export function pointTimestamp(value: unknown): { text: string; epochNs: bigint } {
+  requireValue(typeof value === 'string', 'invalid_identity_timestamp');
+  const parts = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+  requireValue(parts, 'identity_timestamp_requires_absolute_time');
+  const fraction = (parts[2] ?? '').padEnd(3, '0');
+  const millis = timestamp(`${parts[1]}.${fraction.slice(0, 3)}${parts[3]}`, 'UTC');
+  return { text: `${new Date(millis).toISOString().slice(0, 19)}.${fraction}Z`,
+    epochNs: BigInt(millis) * 1_000_000n + BigInt(fraction.padEnd(9, '0').slice(3)) };
+}

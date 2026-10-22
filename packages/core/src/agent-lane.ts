@@ -1,5 +1,5 @@
 import type { ApiResponse } from './client.js';
-import { requireValue, resolveAgentWindow, timestamp, type AgentWindow } from './agent-window.js';
+import { requireValue, resolveAgentWindow, pointTimestamp, type AgentWindow } from './agent-window.js';
 
 export type AgentToolName = 'lake_sql' | 'prevalence' | 'risk_scores' | 'resolve_identity' | 'lookup';
 export type AgentToolResponse = { window: AgentWindow | null; data?: unknown; error?: unknown; data_semantics?: string; retrieved_at?: string };
@@ -79,15 +79,15 @@ export async function executeAgentTool(request: AgentRequest, name: AgentToolNam
       }
       semantics = 'hourly_decayed_7d_risk_scores_in_window_including_prior_evidence_and_clears';
     } else if (name === 'resolve_identity') {
-      const reference = args.timestamp === undefined ? end : timestamp(args.timestamp, window.time_zone);
-      const referenceTime = new Date(reference).toISOString();
+      const reference = pointTimestamp(args.timestamp === undefined ? window.end : args.timestamp);
+      const referenceTime = reference.text;
       result = await request('GET', '/api/identity/resolve', undefined, { query: { ip: text(args.ip, 'ip'), timestamp: referenceTime } });
       if (result.success) {
         const data = available(result.data);
         const match = data.match == null ? undefined : object(data.match);
         // Hosted uses match.last_seen; the open endpoint uses observed_at.
         const observed = match?.last_seen ?? data.observed_at ?? null;
-        requireValue(observed === null || (typeof observed === 'string' && Number.isFinite(Date.parse(observed)) && Date.parse(observed) <= reference), 'invalid_identity_observation_time');
+        requireValue(observed === null || (typeof observed === 'string' && pointTimestamp(observed).epochNs <= reference.epochNs), 'invalid_identity_observation_time');
         requireValue(!match || observed !== null, 'missing_identity_observation_time');
         result = { success: true, data: { ...data, reference_time: referenceTime, observed_at: observed } };
       }

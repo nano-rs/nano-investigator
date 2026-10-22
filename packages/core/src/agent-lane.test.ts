@@ -130,3 +130,15 @@ describe('window discipline', () => {
     for (const args of [{ start: '2026-02-30', end: '2026-03-01' }, { time_zone: 'invalid' }, { widen_reason: ' ' }, { case_context: { case_id: 'a', alert_time: 'yesterday' } }]) expect(() => resolveAgentWindow(args)).toThrow();
   });
 });
+
+it('preserves microsecond event timestamps and refuses observations one microsecond in the future', async () => {
+  const at = '2026-10-16T08:00:00.123456Z';
+  const fetch = mock({ body: { match: { last_seen: at, hostname: 'precise' } } }, { body: { match: { last_seen: '2026-10-16T08:00:00.123457Z' } } });
+  const sdk = client();
+  const args = { ...dates, ip: '192.0.2.1', timestamp: '2026-10-16T04:00:00.123456-04:00' };
+  const first = await sdk.agentTool('resolve_identity', args);
+  expect(first.success).toBe(true);
+  expect(new URL(fetch.mock.calls[0][0]).searchParams.get('timestamp')).toBe(at);
+  expect(first.data?.data).toMatchObject({ reference_time: at, observed_at: at });
+  expect((await sdk.agentTool('resolve_identity', args)).success).toBe(false);
+});

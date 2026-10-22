@@ -19,6 +19,7 @@ These are the canonical, version-controlled copies. Claude Code auto-loads skill
 | `case-temporal-scoping` | **When to look** | Scoping/starting/resuming a case or entity investigation. Expands the window backward (lead-up) and forward (follow-up through now) instead of trusting the alert timestamps. |
 | `entity-baseline-comparison` | **Is it new?** | About to call something suspicious/rare/new. Pulls the entity's pre-incident baseline to judge whether behavior actually changed. |
 | `benign-business-ruleout` | **Is it legitimate?** | At the verdict/disposition step. Applies discriminators to exclude normal business/admin/automation before a TP or FP call. |
+| `soar-automation` | **How to respond?** | Automating a response or building SOAR content (packs, connections, actions, flows). Enforces dry run → explicit confirmation → live, and write-only credentials. |
 
 ## Origin
 

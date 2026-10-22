@@ -1485,3 +1485,279 @@ export interface HuntDraftProposal {
 export interface ProposeHuntDraftsRequest {
   drafts: HuntDraftProposal[];
 }
+
+// ============================================================================
+// SOAR Types (tenant /api/soar/*, nanosiem-enterprise soar dto.rs)
+// ============================================================================
+//
+// Wire contract: packages/core/src/fixtures/soar-openapi.json. Credential values
+// are write-only: no response type carries them, only `credential_fields`
+// metadata with a `configured` flag.
+
+export interface SoarSettings {
+  soar_enabled: boolean;
+  revision: number;
+}
+
+export interface SoarConfigField {
+  name: string;
+  label: string;
+  required: boolean;
+  one_of: string[];
+  default?: string | null;
+}
+
+export interface SoarCredentialField {
+  name: string;
+  label: string;
+  required: boolean;
+  configured: boolean;
+}
+
+export interface SoarInput {
+  name: string;
+  type: string;
+  required: boolean;
+  pattern?: string | null;
+}
+
+export interface SoarAction {
+  name: string;
+  display_name: string;
+  description: string;
+  effect: string;
+  approval_required: boolean;
+  approval_forced: boolean;
+  idempotent: boolean;
+  inputs: SoarInput[];
+  require_one_of: string[][];
+  rollback?: string | null;
+}
+
+export interface SoarPack {
+  origin: string;
+  availability: string;
+  name: string;
+  display_name: string;
+  description: string;
+  vendor: string;
+  categories: string[];
+  version: string;
+  installed_version?: string | null;
+  installed: boolean;
+  enabled: boolean;
+  withdrawn: boolean;
+  change_summary: string;
+  config_fields: SoarConfigField[];
+  credential_fields: SoarCredentialField[];
+  actions: SoarAction[];
+  test_action?: string | null;
+  provenance: unknown;
+  per_minute: number;
+  per_day: number;
+}
+
+export interface SoarPacks {
+  catalog_status: string;
+  catalog_expires_at?: string | null;
+  packs: SoarPack[];
+}
+
+export interface SoarCreateConnection {
+  pack_name: string;
+  label: string;
+  config: Record<string, unknown>;
+  /** Write-only. Never echoed by the API or by these tools. */
+  credentials: Record<string, string>;
+}
+
+export interface SoarUpdateConnection {
+  label?: string;
+  config?: Record<string, unknown>;
+  /** Write-only. Omitted fields keep stored values; empty values remove optional credentials. */
+  credentials?: Record<string, string>;
+}
+
+export interface SoarConnection {
+  id: string;
+  pack_name: string;
+  label: string;
+  config: unknown;
+  credential_fields: SoarCredentialField[];
+  ready: boolean;
+  created_at: string;
+  updated_at: string;
+  last_test_at?: string | null;
+  last_test_status?: string | null;
+  active_runs: number;
+  can_delete: boolean;
+}
+
+export interface SoarConnections {
+  connections: SoarConnection[];
+}
+
+export interface SoarTestResult {
+  status: string;
+  message?: string | null;
+  outputs: unknown;
+  tested_at: string;
+}
+
+export interface SoarRunRequest {
+  connection_id: string;
+  action: string;
+  inputs: Record<string, unknown>;
+  case_id?: string;
+  dry_run?: boolean;
+}
+
+export interface SoarRun {
+  id: string;
+  connection_id?: string | null;
+  pack_name?: string | null;
+  pack_version?: string | null;
+  action?: string | null;
+  inputs: unknown;
+  case_id?: string | null;
+  dry_run: boolean;
+  status: string;
+  requested_by: string;
+  approval_required: boolean;
+  created_at: string;
+  outputs: unknown;
+  error_class?: string | null;
+  wall_delivery: unknown;
+  flow_id?: string | null;
+  flow_version?: number | null;
+  trigger_kind: string;
+  trigger_ref?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  executor_pending: boolean;
+}
+
+export interface SoarRuns {
+  runs: SoarRun[];
+  limit: number;
+  offset: number;
+}
+
+export interface SoarStepExecution {
+  id: string;
+  module_id: string;
+  iteration: unknown;
+  attempt: number;
+  attempt_group: number;
+  status: string;
+  request_summary: unknown;
+  outputs: unknown;
+  error_class?: string | null;
+  started_at: string;
+  finished_at?: string | null;
+}
+
+export interface SoarApproval {
+  id: string;
+  run_id: string;
+  module_id: string;
+  requested_action: unknown;
+  requested_by: string;
+  requested_source: string;
+  ambiguous: boolean;
+  status: string;
+  created_at: string;
+  expires_at: string;
+  decided_by?: string | null;
+  decided_at?: string | null;
+  choice?: unknown;
+  reason?: string | null;
+}
+
+export interface SoarApprovals {
+  approvals: SoarApproval[];
+  limit: number;
+  offset: number;
+}
+
+export interface SoarRunDetail extends SoarRun {
+  steps: SoarStepExecution[];
+  approvals: SoarApproval[];
+  next_steps_offset?: number | null;
+  next_approvals_offset?: number | null;
+}
+
+export interface SoarRunDetailQuery {
+  steps_limit?: number;
+  steps_offset?: number;
+  approvals_limit?: number;
+  approvals_offset?: number;
+}
+
+export interface SoarApprovalQuery {
+  status?: 'pending' | 'approved' | 'rejected' | 'expired' | 'canceled';
+  limit?: number;
+  offset?: number;
+}
+
+export type SoarTriggerKind = 'manual' | 'alert' | 'case' | 'schedule';
+
+export interface SoarFlowTrigger {
+  on: SoarTriggerKind;
+  match?: string | null;
+  cron?: string | null;
+}
+
+export type SoarFlowStatus = 'draft' | 'live' | 'archived';
+
+export interface SoarCreateFlow {
+  name: string;
+  definition: Record<string, unknown>;
+  trigger: SoarFlowTrigger;
+  status?: SoarFlowStatus;
+}
+
+export interface SoarUpdateFlow {
+  expected_version: number;
+  name: string;
+  definition: Record<string, unknown>;
+  trigger: SoarFlowTrigger;
+  status: SoarFlowStatus;
+}
+
+export interface SoarFlowValidation {
+  valid: boolean;
+  module_count: number;
+  summary: string;
+}
+
+export interface SoarFlow {
+  id: string;
+  name: string;
+  version: number;
+  status: string;
+  definition: unknown;
+  trigger: unknown;
+  created_by: string;
+  updated_by: string;
+  created_at: string;
+  updated_at: string;
+  next_run_at?: string | null;
+}
+
+export interface SoarFlows {
+  flows: SoarFlow[];
+  event_overflow_count: number;
+  last_event_overflow_at?: string | null;
+  admission_backpressure?: { reason: string; since: string } | null;
+}
+
+export interface SoarRunFlow {
+  inputs: Record<string, unknown>;
+  case_id?: string;
+  dry_run?: boolean;
+}
+
+export interface SoarDeleted {
+  deleted: boolean;
+}

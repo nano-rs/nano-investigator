@@ -1,0 +1,2634 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "nano tenant SOAR API (vendored subset)",
+    "version": "0.1.0"
+  },
+  "x-nano-source": {
+    "from": "https://us.nano.rs/t/<tenant>/api-docs/openapi.json",
+    "refreshed_at": "2026-10-22"
+  },
+  "paths": {
+    "/api/soar/actions/run": {
+      "post": {
+        "operationId": "soar_queue_action",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SoarRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarRun"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Resource has dependencies or changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    },
+    "/api/soar/approvals": {
+      "get": {
+        "operationId": "soar_list_approvals",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarApprovals"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid query"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    },
+    "/api/soar/approvals/{id}": {
+      "get": {
+        "operationId": "soar_get_approval",
+        "parameters": [
+          {
+            "description": "Tenant-scoped approval",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarApproval"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    },
+    "/api/soar/approvals/{id}/approve": {
+      "post": {
+        "description": "Interactive human JWT only; automation keys and self-approval are refused.",
+        "operationId": "soar_approve",
+        "parameters": [
+          {
+            "description": "Tenant-scoped approval",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideApproval"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarApproval"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid decision or self-approval"
+          },
+          "403": {
+            "description": "Human tenant authority required"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Approval expired or authority changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    },
+    "/api/soar/approvals/{id}/reject": {
+      "post": {
+        "description": "Interactive human JWT only; automation keys are refused.",
+        "operationId": "soar_reject",
+        "parameters": [
+          {
+            "description": "Tenant-scoped approval",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideApproval"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarApproval"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid decision"
+          },
+          "403": {
+            "description": "Human tenant authority required"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Approval expired or authority changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    },
+    "/api/soar/connections": {
+      "get": {
+        "description": "Enabled, entitled viewers receive connection metadata. Current members with soar:manage may instead list sanitized credential cleanup metadata while SOAR is off or billing entitlement has lapsed; no configuration, credential fields or test results are disclosed.",
+        "operationId": "soar_list_connections",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarConnections"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Resource has dependencies or changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      },
+      "post": {
+        "operationId": "soar_create_connection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SoarCreateConnection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarConnection"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Resource has dependencies or changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    },
+    "/api/soar/connections/{id}": {
+      "delete": {
+        "description": "Current members with soar:manage may delete their tenant's stored connection while SOAR is off or billing entitlement has lapsed. Active run references still prevent deletion. This exception does not authorize editing, testing or executing connections.",
+        "operationId": "soar_remove_connection",
+        "parameters": [
+          {
+            "description": "Tenant-scoped resource",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarDeleted"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Resource has dependencies or changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      },
+      "get": {
+        "operationId": "soar_get_connection",
+        "parameters": [
+          {
+            "description": "Tenant-scoped resource",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarConnection"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Resource has dependencies or changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      },
+      "put": {
+        "operationId": "soar_update_connection",
+        "parameters": [
+          {
+            "description": "Tenant-scoped resource",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SoarUpdateConnection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarConnection"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Resource has dependencies or changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    },
+    "/api/soar/connections/{id}/test": {
+      "post": {
+        "operationId": "soar_test_connection",
+        "parameters": [
+          {
+            "description": "Tenant-scoped resource",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SoarTestConnection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarTestResult"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Resource has dependencies or changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    },
+    "/api/soar/flows": {
+      "get": {
+        "operationId": "soar_list_flows",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarFlows"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      },
+      "post": {
+        "operationId": "soar_create_flow",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFlow"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarFlow"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid bounded flow definition"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "409": {
+            "description": "Flow references changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    },
+    "/api/soar/flows/{id}": {
+      "delete": {
+        "operationId": "soar_remove_flow",
+        "parameters": [
+          {
+            "description": "Tenant-scoped flow",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarDeleted"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Flow has active dependencies"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      },
+      "get": {
+        "operationId": "soar_get_flow",
+        "parameters": [
+          {
+            "description": "Tenant-scoped flow",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarFlow"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      },
+      "put": {
+        "operationId": "soar_update_flow",
+        "parameters": [
+          {
+            "description": "Tenant-scoped flow",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFlow"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarFlow"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid bounded flow definition"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Flow version or references changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    },
+    "/api/soar/flows/{id}/run": {
+      "post": {
+        "operationId": "soar_queue_flow",
+        "parameters": [
+          {
+            "description": "Tenant-scoped flow",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunFlow"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarRun"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Flow references or authority changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    },
+    "/api/soar/flows/validate": {
+      "post": {
+        "operationId": "soar_validate_flow",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateFlow"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlowValidation"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid bounded flow definition"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "409": {
+            "description": "Flow references changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    },
+    "/api/soar/packs": {
+      "get": {
+        "operationId": "soar_list_packs",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarPacks"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Resource has dependencies or changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    },
+    "/api/soar/packs/{name}": {
+      "delete": {
+        "operationId": "soar_remove_pack",
+        "parameters": [
+          {
+            "description": "Tenant-scoped resource",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarDeleted"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Resource has dependencies or changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      },
+      "get": {
+        "operationId": "soar_get_pack",
+        "parameters": [
+          {
+            "description": "Tenant-scoped resource",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarPacks"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Resource has dependencies or changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    },
+    "/api/soar/packs/{name}/install": {
+      "post": {
+        "operationId": "soar_install_pack",
+        "parameters": [
+          {
+            "description": "Tenant-scoped resource",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SoarInstall"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarPacks"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Resource has dependencies or changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    },
+    "/api/soar/packs/{name}/upgrade": {
+      "post": {
+        "operationId": "soar_upgrade_pack",
+        "parameters": [
+          {
+            "description": "Tenant-scoped resource",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SoarInstall"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarPacks"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Resource has dependencies or changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    },
+    "/api/soar/runs": {
+      "get": {
+        "operationId": "soar_list_runs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarRuns"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Resource has dependencies or changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    },
+    "/api/soar/runs/{id}": {
+      "get": {
+        "operationId": "soar_get_run",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "steps_limit",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "path",
+            "name": "steps_offset",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "path",
+            "name": "approvals_limit",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "path",
+            "name": "approvals_offset",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Tenant-scoped resource",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarRunDetail"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Resource has dependencies or changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    },
+    "/api/soar/runs/{id}/cancel": {
+      "post": {
+        "operationId": "soar_cancel_run",
+        "parameters": [
+          {
+            "description": "Tenant-scoped run",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarRun"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "404": {
+            "description": "Resource not found"
+          },
+          "409": {
+            "description": "Run authority changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    },
+    "/api/soar/settings": {
+      "get": {
+        "description": "Available while SOAR is disabled; missing preference defaults off.",
+        "operationId": "soar_get_settings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarSettings"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "description": "Tenant authority denied"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      },
+      "put": {
+        "description": "Human tenant admin only. Enabling also requires the Soar entitlement. Disabling cancels active intents and expires pending approvals; history remains readable.",
+        "operationId": "soar_update_settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSoarSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarSettings"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid settings"
+          },
+          "403": {
+            "description": "Human tenant admin required"
+          },
+          "409": {
+            "description": "Revision or authority changed"
+          },
+          "503": {
+            "description": "SOAR unavailable"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "tags": [
+          "SOAR"
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AdmissionBackpressure": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "since": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "since"
+        ],
+        "type": "object"
+      },
+      "CreateFlow": {
+        "additionalProperties": false,
+        "properties": {
+          "definition": {},
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/FlowTrigger"
+          }
+        },
+        "required": [
+          "name",
+          "definition",
+          "trigger"
+        ],
+        "type": "object"
+      },
+      "DecideApproval": {
+        "additionalProperties": false,
+        "properties": {
+          "choice": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "FlowTrigger": {
+        "additionalProperties": false,
+        "properties": {
+          "cron": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "match": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "on": {
+            "$ref": "#/components/schemas/TriggerKind"
+          }
+        },
+        "required": [
+          "on"
+        ],
+        "type": "object"
+      },
+      "FlowValidation": {
+        "properties": {
+          "module_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "valid": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "valid",
+          "module_count",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "RunFlow": {
+        "additionalProperties": false,
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dry_run": {
+            "type": "boolean"
+          },
+          "inputs": {}
+        },
+        "required": [
+          "inputs"
+        ],
+        "type": "object"
+      },
+      "SoarAction": {
+        "properties": {
+          "approval_forced": {
+            "type": "boolean"
+          },
+          "approval_required": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "effect": {
+            "type": "string"
+          },
+          "idempotent": {
+            "type": "boolean"
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/SoarInput"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "require_one_of": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "rollback": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "display_name",
+          "description",
+          "effect",
+          "approval_required",
+          "approval_forced",
+          "idempotent",
+          "inputs",
+          "require_one_of"
+        ],
+        "type": "object"
+      },
+      "SoarApproval": {
+        "properties": {
+          "ambiguous": {
+            "type": "boolean"
+          },
+          "choice": {},
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "decided_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "decided_by": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "module_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requested_action": {},
+          "requested_by": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "requested_source": {
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "module_id",
+          "requested_action",
+          "requested_by",
+          "requested_source",
+          "ambiguous",
+          "status",
+          "created_at",
+          "expires_at"
+        ],
+        "type": "object"
+      },
+      "SoarApprovals": {
+        "properties": {
+          "approvals": {
+            "items": {
+              "$ref": "#/components/schemas/SoarApproval"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "offset": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "approvals",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "SoarConfigField": {
+        "properties": {
+          "default": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "one_of": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "required",
+          "one_of"
+        ],
+        "type": "object"
+      },
+      "SoarConnection": {
+        "properties": {
+          "active_runs": {
+            "description": "Connections with queued/active runs cannot be removed.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "can_delete": {
+            "type": "boolean"
+          },
+          "config": {},
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "credential_fields": {
+            "items": {
+              "$ref": "#/components/schemas/SoarCredentialField"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "last_test_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_test_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pack_name": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "pack_name",
+          "label",
+          "config",
+          "credential_fields",
+          "ready",
+          "created_at",
+          "updated_at",
+          "active_runs",
+          "can_delete"
+        ],
+        "type": "object"
+      },
+      "SoarConnections": {
+        "properties": {
+          "connections": {
+            "items": {
+              "$ref": "#/components/schemas/SoarConnection"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "connections"
+        ],
+        "type": "object"
+      },
+      "SoarCreateConnection": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {},
+          "credentials": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "writeOnly": true
+          },
+          "label": {
+            "type": "string"
+          },
+          "pack_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pack_name",
+          "label",
+          "config",
+          "credentials"
+        ],
+        "type": "object"
+      },
+      "SoarCredentialField": {
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "required",
+          "configured"
+        ],
+        "type": "object"
+      },
+      "SoarDeleted": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "type": "object"
+      },
+      "SoarFlow": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "definition": {},
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_run_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "trigger": {},
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated_by": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "version",
+          "status",
+          "definition",
+          "trigger",
+          "created_by",
+          "updated_by",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "SoarFlows": {
+        "properties": {
+          "admission_backpressure": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AdmissionBackpressure",
+                "description": "Capacity refusal keeps events and live schedules pending. Clears after\nthe next successfully admitted run; distinct from omitted event count."
+              }
+            ]
+          },
+          "event_overflow_count": {
+            "description": "Cumulative source events omitted due to queue capacity or payload limits.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "flows": {
+            "items": {
+              "$ref": "#/components/schemas/SoarFlow"
+            },
+            "type": "array"
+          },
+          "last_event_overflow_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "flows",
+          "event_overflow_count"
+        ],
+        "type": "object"
+      },
+      "SoarInput": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "pattern": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "required"
+        ],
+        "type": "object"
+      },
+      "SoarInstall": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "type": "object"
+      },
+      "SoarPack": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/SoarAction"
+            },
+            "type": "array"
+          },
+          "availability": {
+            "type": "string"
+          },
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "change_summary": {
+            "type": "string"
+          },
+          "config_fields": {
+            "items": {
+              "$ref": "#/components/schemas/SoarConfigField"
+            },
+            "type": "array"
+          },
+          "credential_fields": {
+            "items": {
+              "$ref": "#/components/schemas/SoarCredentialField"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "installed": {
+            "type": "boolean"
+          },
+          "installed_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "per_day": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "provenance": {},
+          "test_action": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "vendor": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "withdrawn": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "origin",
+          "availability",
+          "name",
+          "display_name",
+          "description",
+          "vendor",
+          "categories",
+          "version",
+          "installed",
+          "enabled",
+          "withdrawn",
+          "change_summary",
+          "config_fields",
+          "credential_fields",
+          "actions",
+          "provenance",
+          "per_minute",
+          "per_day"
+        ],
+        "type": "object"
+      },
+      "SoarPacks": {
+        "properties": {
+          "catalog_expires_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "catalog_status": {
+            "type": "string"
+          },
+          "packs": {
+            "items": {
+              "$ref": "#/components/schemas/SoarPack"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "catalog_status",
+          "packs"
+        ],
+        "type": "object"
+      },
+      "SoarRun": {
+        "properties": {
+          "action": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "approval_required": {
+            "type": "boolean"
+          },
+          "case_id": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "connection_id": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "dry_run": {
+            "type": "boolean"
+          },
+          "error_class": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "executor_pending": {
+            "description": "Legacy intents lacking durable authority are inspectable but cannot send.",
+            "type": "boolean"
+          },
+          "finished_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "flow_id": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "flow_version": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "inputs": {},
+          "outputs": {},
+          "pack_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pack_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requested_by": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "trigger_kind": {
+            "type": "string"
+          },
+          "trigger_ref": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "wall_delivery": {}
+        },
+        "required": [
+          "id",
+          "inputs",
+          "dry_run",
+          "status",
+          "requested_by",
+          "approval_required",
+          "created_at",
+          "outputs",
+          "wall_delivery",
+          "trigger_kind",
+          "executor_pending"
+        ],
+        "type": "object"
+      },
+      "SoarRunDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SoarRun"
+          },
+          {
+            "properties": {
+              "approvals": {
+                "items": {
+                  "$ref": "#/components/schemas/SoarApproval"
+                },
+                "type": "array"
+              },
+              "next_approvals_offset": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "next_steps_offset": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "steps": {
+                "items": {
+                  "$ref": "#/components/schemas/SoarStepExecution"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "steps",
+              "approvals"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "SoarRunRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "case_id": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "connection_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "dry_run": {
+            "type": "boolean"
+          },
+          "inputs": {}
+        },
+        "required": [
+          "connection_id",
+          "action",
+          "inputs"
+        ],
+        "type": "object"
+      },
+      "SoarRuns": {
+        "properties": {
+          "limit": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "offset": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/SoarRun"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "runs",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "SoarSettings": {
+        "properties": {
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "soar_enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "soar_enabled",
+          "revision"
+        ],
+        "type": "object"
+      },
+      "SoarStepExecution": {
+        "properties": {
+          "attempt": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "attempt_group": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "error_class": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "finished_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "iteration": {},
+          "module_id": {
+            "type": "string"
+          },
+          "outputs": {},
+          "request_summary": {},
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "module_id",
+          "iteration",
+          "attempt",
+          "attempt_group",
+          "status",
+          "request_summary",
+          "outputs",
+          "started_at"
+        ],
+        "type": "object"
+      },
+      "SoarTestConnection": {
+        "additionalProperties": false,
+        "properties": {
+          "inputs": {}
+        },
+        "type": "object"
+      },
+      "SoarTestResult": {
+        "properties": {
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "outputs": {},
+          "status": {
+            "type": "string"
+          },
+          "tested_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "outputs",
+          "tested_at"
+        ],
+        "type": "object"
+      },
+      "SoarUpdateConnection": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {},
+          "credentials": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": [
+              "object",
+              "null"
+            ],
+            "writeOnly": true
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "TriggerKind": {
+        "enum": [
+          "manual",
+          "alert",
+          "case",
+          "schedule"
+        ],
+        "type": "string"
+      },
+      "UpdateFlow": {
+        "additionalProperties": false,
+        "properties": {
+          "definition": {},
+          "expected_version": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/FlowTrigger"
+          }
+        },
+        "required": [
+          "expected_version",
+          "name",
+          "definition",
+          "trigger",
+          "status"
+        ],
+        "type": "object"
+      },
+      "UpdateSoarSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "soar_enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "soar_enabled",
+          "expected_revision",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "ValidateFlow": {
+        "additionalProperties": false,
+        "properties": {
+          "definition": {}
+        },
+        "required": [
+          "definition"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "api_key": {
+        "description": "API key for service-to-service authentication",
+        "in": "header",
+        "name": "X-API-Key",
+        "type": "apiKey"
+      }
+    }
+  }
+}

@@ -92,7 +92,7 @@ describe('production agent client', () => {
     const window = resolveAgentWindow(dates);
     mock({ body: { anchor: window.end, step_seconds: 3600, window_hours: 168, points: [{ t: '2026-10-16T03:00:00Z', score: 9 }, { t: '2026-10-16T04:00:00Z', score: 2 }, { t: window.end, score: 5 }], markers: [{ private: true }] } }, { body: { anchor: now } });
     const result = await client().agentTool('risk_scores', { reason: 'Check the suspicious entity from lake SQL.', ...dates, entity: 'user/a', entity_type: 'user' });
-    expect(result.data?.data).toMatchObject({ points: [{ t: '2026-10-16T04:00:00Z', score: 2 }] });
+    expect(result.data?.data).toMatchObject({ points: [{ t: '2026-10-16T04:00:00Z', score: 2 }, { t: window.end, score: 5 }] });
     expect(JSON.stringify(result)).not.toContain('private');
     expect((await client().agentTool('risk_scores', { reason: 'Check the suspicious entity from lake SQL.', ...dates, entity: 'a', entity_type: 'user' })).success).toBe(false);
   });
@@ -161,4 +161,40 @@ it('refuses a prevalence echo shifted by one microsecond',async()=>{
  const requested=resolveAgentWindow(dates);
  vi.stubGlobal('fetch',vi.fn(async (_url,opts)=>{const req=JSON.parse(opts.body);return new Response(JSON.stringify({window:{start:requested.start,end:requested.end,time_zone:req.time_zone,widen_reason:null},data:{data:[{secret:true}],requested_window:{start:'2026-10-16T04:00:00.000001Z',end:requested.end},effective_window:{start:requested.start,end:requested.end},note:'prevalence counted over whole parts; effective window shown'}}));}));
  const result=await client().agentTool('prevalence',{...dates,values:['a.test'],reason:'Verify current rarity.'});expect(result.success).toBe(false);expect(JSON.stringify(result)).not.toContain('secret');
+});
+
+it('lists authorized catalog tables without executing SQL',async()=>{
+ const fetch=mock({body:{agent_lane:{tenant_id:A}}},{body:{tables:[{name:'mytenant.proxy',kind:'source'}],truncated:false,window:null}});
+ const result=await client().agentTool('lake_sql',{});
+ expect(result.success).toBe(true);expect(result.data?.data_semantics).toBe('authorized_catalog_metadata');
+ expect(fetch.mock.calls[1][0]).toBe(`https://us.nano.rs/v1/tenants/${A}/lake/usage`);
+ expect(result.data?.data).toMatchObject({tables:[{name:'mytenant.proxy'}]});expect(result.data?.prevalence_semantics).toBeUndefined();
+});
+it('accepts literal URL query punctuation and refuses star patterns',async()=>{
+ const fetch=mock({body:{matches:[]}});
+ expect((await client().agentTool('lookup',{...dates,reason:'Inspect the suspicious URL.',ioc:'https://example.test/a%20b?ids[]=1'})).success).toBe(true);
+ expect(JSON.parse(fetch.mock.calls[0][1].body).input.ioc).toBe('https://example.test/a%20b?ids[]=1');
+ expect((await client().agentTool('lookup',{...dates,reason:'Inspect the suspicious URL.',ioc:'https://*.test/'})).success).toBe(false);expect(fetch).toHaveBeenCalledTimes(1);
+});
+it('returns no whole-parts note when coverage is exact',async()=>{
+ const window=resolveAgentWindow(dates);mock({body:{requested_window:{start:window.start,end:window.end},effective_window:{start:window.start,end:window.end},data:[]}});
+ const result=await client().agentTool('prevalence',{...dates,reason:'Check the suspicious domain.',values:['evil.test']});
+ expect(result.success).toBe(true);expect(result.data?.note).toBeUndefined();expect(result.data?.window?.origin).toBe(window.origin);
+});
+it('default risk window includes the current point',async()=>{
+ vi.useFakeTimers();vi.setSystemTime(new Date(now));
+ mock({body:{anchor:now,step_seconds:3600,window_hours:168,points:[{t:now,score:72}]}});
+ const result=await client().agentTool('risk_scores',{reason:'Assess the suspicious user.',entity:'alice',entity_type:'user'});
+ expect(result.success).toBe(true);expect(result.data?.data).toMatchObject({points:[{t:now,score:72}]});
+});
+
+it('refuses excessive whole-part coverage without an explicit widening reason',async()=>{
+ const window=resolveAgentWindow(dates);
+ const fetch=vi.fn(async(_u:string,opts:RequestInit)=>{
+  const r=JSON.parse(String(opts.body));const effective={start:'2026-09-17T04:00:00.000Z',end:window.end};
+  return new Response(JSON.stringify({window:{...effective,time_zone:r.time_zone,widen_reason:r.widen_reason??null},data:{data:[],requested_window:{start:window.start,end:window.end},effective_window:effective,note:'prevalence counted over whole parts; effective window shown'}}));
+ });vi.stubGlobal('fetch',fetch);
+ const args={...dates,reason:'Check the suspicious domain.',values:['evil.test']};
+ expect((await client().agentTool('prevalence',args)).error?.message).toContain('effective_span_requires_widen_reason');
+ expect((await client().agentTool('prevalence',{...args,widen_reason:'Analyst approved whole-part coverage'})).success).toBe(true);
 });

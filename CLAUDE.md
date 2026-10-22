@@ -9,7 +9,7 @@
 - Echo the absolute window and time zone in every answer. Wider than 7d requires a visible `widen_reason`.
 - Empty/thin results: offer 24h → 7d → 30d; never silently widen or retry a charged query. Case first-seen lookbacks may widen for a stated case reason, each as its own visible step.
 - `resolve_identity` is an as-of IP match: pass the event timestamp, or the window end. Report `observed_at`. Only directory attributes and lookup tables are current snapshots.
-- Use `lake_sql` only for sealed hours, one source table per query with `WHERE {window}` and no custom time predicate. Recent unsealed hours stay on nPL `search`. For prevalence use the lake_sql ingest stamp first. Cell prevalence is only for current counts or unstamped artifacts (65535). All four cell features require a narrow known entity and one-sentence reason; budgets are 6/session, 30/tenant/day, 1 concurrent/tool/tenant. Back off on budget errors. Report requested_window and effective_window for whole-part prevalence.
+- Use `lake_sql` only for sealed hours, one source table per query with `WHERE {window}` and no custom time predicate. Recent unsealed hours stay on nPL `search`. For prevalence use the lake_sql ingest stamp first. Cell prevalence is only for current counts or unstamped artifacts (65535). All four cell features require a narrow known entity and one-sentence reason; budgets are 6/authenticated API key/rolling hour, 30/tenant/day, 1 concurrent/tool/tenant. Back off on budget errors. Report requested_window and effective_window for whole-part prevalence.
 
 ## Query Building Rules
 
@@ -34,7 +34,7 @@
 **Scope → Enrich → Correlate → Present → Recommend**
 
 1. **Scope** — Read the alert/event. Identify entities. Set time window. Call `get_source_types` to discover available log sources (never assume source type names).
-2. **Enrich** — For each entity: get_entity_context, prevalence, GeoIP/IOC.
+2. **Enrich** — Use scoped lake_sql to inspect ingest prevalence and IOC stamps first; guarded cell tools only answer a specific remaining question, with reason.
 3. **Correlate** — Related alerts? Related cases? Build timeline.
 4. **Present** — Summarize findings at each checkpoint. Don't silently investigate.
 5. **Recommend** — FP/TP assessment, immediate actions, follow-ups.
@@ -60,15 +60,15 @@ This is different from starting a fresh investigation from an alert — `review_
 
 ## Entity Investigation Patterns
 
-- **IP** — get_entity_context → lookup_ip → search activity → check alerts/cases
-- **User** — get_entity_context → search auth activity → check privilege escalation → check off-hours
-- **Host** — get_entity_context → search processes → check network connections → check prevalence
-- **Hash** — get_prevalence → lookup_ioc → search all hosts with this hash → check first seen
-- **Domain** — get_prevalence → lookup_ioc → search DNS + proxy logs → check subdomains
+- **IP** — lake_sql stamps → guarded lookup if needed → search recent activity → check alerts/cases
+- **User** — lake_sql stamps → search auth activity → check privilege escalation → check off-hours
+- **Host** — lake_sql stamps → search processes → check network connections → check prevalence
+- **Hash** — lake_sql stamps → guarded lookup only if needed → search all hosts with this hash → check first seen
+- **Domain** — lake_sql stamps → guarded lookup only if needed → search DNS + proxy logs → check subdomains
 
 ## Identity Resolution (Host ↔ IP ↔ User)
 
-Use observed OCSF identities (`src_endpoint.ip`, `dst_endpoint.ip`, `device.hostname`, `actor.user.name`) within a bounded time window. On hosted, use `get_entity_context` to collect risk, alerts and cases. On open core use `search` and `get_prevalence`. Never assume an IP-to-host mapping or a legacy storage table exists; establish mappings from observed events and record their time window.
+Use observed OCSF identities (`src_endpoint.ip`, `dst_endpoint.ip`, `device.hostname`, `actor.user.name`) within a bounded time window. On hosted, use scoped lake_sql and guarded risk_scores only for a known suspicious entity. On open core use `search`; guarded capabilities fail closed if unavailable. Never assume an IP-to-host mapping or a legacy storage table exists; establish mappings from observed events and record their time window.
 
 ## Query Refinement Protocol
 

@@ -18,7 +18,7 @@ function text(value: unknown, name: string): string {
 }
 function narrow(value: unknown, name: string): string {
   const s = text(value, name);
-  requireValue(s.length <= 320 && s.trim().toLowerCase() !== 'all' && !/[*?%\[\]\x00-\x1f]/.test(s), 'explicit_entity_required_use_lake_sql_first');
+  requireValue(s.length <= 320 && s.trim().toLowerCase() !== 'all' && !/[*\x00-\x1f]/.test(s) && (/^https?:\/\//.test(s) || !/[?%\[\]]/.test(s)), 'explicit_entity_required_use_lake_sql_first');
   return s;
 }
 function strings(value: unknown, name: string, max = 10): string[] {
@@ -59,16 +59,20 @@ export async function executeAgentTool(request: AgentRequest, name: AgentToolNam
       const data = available(wrapper.data);
       if (name === 'prevalence') {
         const requested = object(data.requested_window), effective = object(data.effective_window);
-        requireValue(pointTimestamp(requested.start).epochNs === BigInt(start) * 1000000n && pointTimestamp(requested.end).epochNs === BigInt(end) * 1000000n && pointTimestamp(effective.start).epochNs <= BigInt(start) * 1000000n && pointTimestamp(effective.end).epochNs >= BigInt(end) * 1000000n && used.start === effective.start && used.end === effective.end && data.note === 'prevalence counted over whole parts; effective window shown', 'prevalence_window_mismatch');
-        window = {...requestedWindow, start: String(effective.start), end: String(effective.end), display_start: new Date(String(effective.start)).toLocaleString('en-US', {timeZone: requestedWindow.time_zone}), display_end: new Date(String(effective.end)).toLocaleString('en-US', {timeZone: requestedWindow.time_zone}), origin: 'whole_parts_effective_coverage'};
-        coverage = {requested_window: requested, effective_window: effective, note: data.note};
+        requireValue(pointTimestamp(requested.start).epochNs === BigInt(start) * 1000000n && pointTimestamp(requested.end).epochNs === BigInt(end) * 1000000n && pointTimestamp(effective.start).epochNs <= BigInt(start) * 1000000n && pointTimestamp(effective.end).epochNs >= BigInt(end) * 1000000n && used.start === effective.start && used.end === effective.end, 'prevalence_window_mismatch');
+        const widened = pointTimestamp(effective.start).epochNs < BigInt(start) * 1000000n || pointTimestamp(effective.end).epochNs > BigInt(end) * 1000000n;
+        requireValue(!widened || data.note === 'prevalence counted over whole parts; effective window shown', 'prevalence_window_mismatch');
+        requireValue(requestedWindow.widen_reason !== null || pointTimestamp(effective.end).epochNs - pointTimestamp(effective.start).epochNs <= BigInt(Math.max(7 * 86400000, (end - start) * 2)) * 1000000n, 'prevalence_effective_span_requires_widen_reason');
+        window = {...requestedWindow, start: String(effective.start), end: String(effective.end), display_start: new Date(String(effective.start)).toLocaleString('en-US', {timeZone: requestedWindow.time_zone}), display_end: new Date(String(effective.end)).toLocaleString('en-US', {timeZone: requestedWindow.time_zone}), origin: widened ? 'whole_parts_effective_coverage' : requestedWindow.origin};
+        if (!widened) delete data.note;
+        coverage = {requested_window: requested, effective_window: effective, ...(widened ? {note: data.note} : {})};
       } else requireValue(used.start === requestedWindow.start && used.end === requestedWindow.end, 'cell_window_mismatch');
       return {success: true, data};
     };
     let result: ApiResponse<unknown>;
     let semantics = 'bounded_events';
     if (name === 'lake_sql') {
-      requireValue(typeof args.sql === 'string' && Buffer.byteLength(args.sql) <= 10000 && args.sql.includes('{window}'), 'window_placeholder_required');
+      requireValue(args.sql === undefined || (typeof args.sql === 'string' && Buffer.byteLength(args.sql) <= 10000 && args.sql.includes('{window}')), 'window_placeholder_required');
       // Resolve the current key's tenant each time. No model-supplied catalog,
       // tenant, endpoint or credential; the Worker repeats authoritative auth.
       const auth = await request('GET', '/api/auth/validate');
@@ -76,8 +80,11 @@ export async function executeAgentTool(request: AgentRequest, name: AgentToolNam
       const identity = object(object(auth.data).agent_lane);
       const tenant = text(identity.tenant_id, 'tenant');
       requireValue(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(tenant) && tenant !== '00000000-0000-0000-0000-000000000000', 'invalid_tenant');
-      result = await request('POST', `/v1/tenants/${tenant}/lake/sql`, { sql: args.sql, start: window.start, end: window.end, time_zone: window.time_zone, ...(window.widen_reason ? { widen_reason: window.widen_reason } : {}), ...(args.case_context ? { case_context: args.case_context } : {}) }, { originOnly: true, agent, timeoutMs: 130000 });
-      if (result.success) {
+      if (args.sql === undefined) {
+        result = await request('GET', `/v1/tenants/${tenant}/lake/usage`, undefined, {originOnly: true, agent});
+        semantics = 'authorized_catalog_metadata';
+      } else result = await request('POST', `/v1/tenants/${tenant}/lake/sql`, { sql: args.sql, start: window.start, end: window.end, time_zone: window.time_zone, ...(window.widen_reason ? { widen_reason: window.widen_reason } : {}), ...(args.case_context ? { case_context: args.case_context } : {}) }, { originOnly: true, agent, timeoutMs: 130000 });
+      if (result.success && args.sql !== undefined) {
         const remote = object(object(result.data).window);
         requireValue(remote.start === window.start && remote.end === window.end && remote.time_zone === window.time_zone && remote.widen_reason === window.widen_reason, 'gateway_window_mismatch');
       }
@@ -98,7 +105,7 @@ export async function executeAgentTool(request: AgentRequest, name: AgentToolNam
         const points = data.points.map(object);
         requireValue(points.every(p => typeof p.t === 'string' && Number.isFinite(Date.parse(p.t)) && typeof p.score === 'number'), 'invalid_risk_timeline');
         // Do not expose unbounded markers/contribution summaries to the model.
-        result = { success: true, data: { entity: args.entity, entity_type: args.entity_type, points: points.filter(p => Date.parse(p.t as string) >= start && Date.parse(p.t as string) < end), step_seconds: data.step_seconds, truncated: data.truncated, ...(data.watch_weight !== undefined ? { watch_weight: data.watch_weight } : {}) } };
+        result = { success: true, data: { entity: args.entity, entity_type: args.entity_type, points: points.filter(p => Date.parse(p.t as string) >= start && Date.parse(p.t as string) <= end), step_seconds: data.step_seconds, truncated: data.truncated, ...(data.watch_weight !== undefined ? { watch_weight: data.watch_weight } : {}) } };
       }
       semantics = 'hourly_decayed_7d_risk_scores_in_window_including_prior_evidence_and_clears';
     } else if (name === 'resolve_identity') {
@@ -127,7 +134,7 @@ export async function executeAgentTool(request: AgentRequest, name: AgentToolNam
       semantics = 'current_lookup_snapshot_not_historical';
     }
     if (!result.success) return { success: false, data: { window, error: result.error }, error: result.error };
-    return { success: true, data: { window, data: result.data, data_semantics: semantics, ...coverage, ...(name === 'lake_sql' ? {prevalence_semantics: 'prevalence at ingest time (stamp)'} : {}), retrieved_at: new Date().toISOString() } };
+    return { success: true, data: { window, data: result.data, data_semantics: semantics, ...coverage, retrieved_at: new Date().toISOString() } };
   } catch (e) {
     const error = { code: 'AGENT_TOOL_REFUSED', message: e instanceof Error ? e.message : 'agent_tool_failed' };
     return { success: false, data: { window, error }, error };

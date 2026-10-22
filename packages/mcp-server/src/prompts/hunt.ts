@@ -64,11 +64,11 @@ export function getHuntEntityPrompt(args: Record<string, string | undefined>): {
 You are hunting for activity related to entity: ${entity} (type: ${entityType})
 Time range: ${timeRange}
 
-## Phase 1 — Context (run these in parallel where possible)
-- get_entity_context for ${entity}
-- ${entityType === 'ip' ? `lookup_ip("${entity}") for GeoIP/ASN` : `check threat-intel matches via search (the ioc_matched / ioc_threat_type / ioc_confidence columns are populated at ingest)`}
-- prevalence(values[]) to understand how common this entity is
-- search for all activity involving this entity in the last ${timeRange}
+## Phase 1 — Lake candidates and stamps first
+- Discover authorized tables using lake_sql without sql; read the source schema.
+- Use scoped lake_sql over sealed hours for ${entity}; inspect prevalence at ingest time (stamp) and ingest threat-intel matches. Use search only for recent unsealed hours.
+- Only if current counts or unstamped artifacts (65535) matter, use guarded prevalence for the specific candidate (max 10 values), reason and bounded window.
+- Use guarded risk_scores, resolve_identity at the event timestamp, or lookup only to answer a specific remaining question, with a one-sentence reason; never fan out cell enrichment across all hits.
 
 ## Phase 2 — Assessment
 After gathering context, assess:
@@ -156,10 +156,10 @@ Time range: ${timeRange}
 
 ## Step 3: ENRICH FINDINGS
 - For any suspicious hits:
-  - Check prevalence (get_prevalence) — is this rare?
+  - Read prevalence at ingest time (stamp) via lake_sql first; guarded prevalence only for current counts or unstamped artifacts (65535), with reason and at most 10 known values.
   - Cross-reference threat intel: filter search results on ioc_matched / ioc_threat_type
   - Check for related alerts and cases
-  - Get entity context for involved entities
+  - Use guarded risk_scores, resolve_identity or lookup only for a specific remaining question, with reason and bounded windows.
 
 ## Step 4: REPORT
 Present a structured hunt report:

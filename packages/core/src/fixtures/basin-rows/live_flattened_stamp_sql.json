@@ -1,0 +1,114 @@
+{
+ "result": {
+  "request_id": "dqe-prod-01M5JXMEA9XQ32ZY1VP5PR4ZMT",
+  "schema": [
+   {
+    "name": "artifact",
+    "descriptor": {
+     "type": {
+      "name": "string"
+     },
+     "nullable": true
+    }
+   },
+   {
+    "name": "hosts",
+    "descriptor": {
+     "type": {
+      "name": "int64"
+     },
+     "nullable": true
+    }
+   },
+   {
+    "name": "common",
+    "descriptor": {
+     "type": {
+      "name": "bool"
+     },
+     "nullable": true
+    }
+   },
+   {
+    "name": "events",
+    "descriptor": {
+     "type": {
+      "name": "int64"
+     },
+     "nullable": false
+    }
+   }
+  ],
+  "rows": [
+   {
+    "artifact": "44.132.33.220",
+    "hosts": 1,
+    "common": false,
+    "events": 2
+   },
+   {
+    "artifact": "159.135.54.103",
+    "hosts": 1,
+    "common": false,
+    "events": 2
+   },
+   {
+    "artifact": "78.72.192.65",
+    "hosts": 1,
+    "common": false,
+    "events": 2
+   },
+   {
+    "artifact": "190.180.215.126",
+    "hosts": 1,
+    "common": false,
+    "events": 2
+   },
+   {
+    "artifact": "48.252.43.173",
+    "hosts": 1,
+    "common": false,
+    "events": 1
+   },
+   {
+    "artifact": "191.202.16.151",
+    "hosts": 1,
+    "common": false,
+    "events": 1
+   },
+   {
+    "artifact": "119.212.35.153",
+    "hosts": 1,
+    "common": false,
+    "events": 1
+   },
+   {
+    "artifact": "191.244.69.138",
+    "hosts": 1,
+    "common": false,
+    "events": 1
+   },
+   {
+    "artifact": "46.23.214.125",
+    "hosts": 1,
+    "common": false,
+    "events": 1
+   },
+   {
+    "artifact": "109.239.220.50",
+    "hosts": 1,
+    "common": false,
+    "events": 1
+   }
+  ],
+  "metrics": {
+   "r2_requests_count": 1021,
+   "files_scanned": 152,
+   "bytes_scanned": 917319536,
+   "cache_hits": 669
+  }
+ },
+ "success": true,
+ "errors": [],
+ "messages": []
+}

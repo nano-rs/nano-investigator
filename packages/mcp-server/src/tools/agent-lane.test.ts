@@ -1,3 +1,5 @@
+import {getInvestigatePrompt} from '../prompts/investigate.js';
+import {getHuntEntityPrompt} from '../prompts/hunt.js';
 import { getHuntCampaignPrompt } from '../prompts/hunt.js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { NanosiemClient } from '@nano-rs/investigator-core';
@@ -46,6 +48,15 @@ it('campaign guidance uses the bounded lane and a 24h default, without the legac
 it('puts stamp-first guidance and enforceable cell restrictions in the public tool catalog',()=>{
  const lake=TOOLS.find(t=>t.name==='lake_sql')!;
  expect(lake.description).toContain('prevalence at ingest time (stamp)');expect(lake.description).toContain('enrichments[6]');
- for(const tool of TOOLS.filter(t=>t.name!=='lake_sql')){expect(tool.inputSchema.required).toContain('reason');expect(tool.description).toContain('6 calls per session');expect(tool.description).toContain('30 calls per tenant');}
+ for(const tool of TOOLS.filter(t=>t.name!=='lake_sql')){expect(tool.inputSchema.required).toContain('reason');expect(tool.description).toContain('6 calls per authenticated API key per rolling hour');expect(tool.description).toContain('30 calls per tenant');}
  expect(TOOLS.find(t=>t.name==='prevalence')!.description).toContain('call this only for current counts or unstamped artifacts');
+});
+
+it('all hunt and investigation workflows start with stamps and exclude retired tools',()=>{
+ for(const prompt of [getInvestigatePrompt({alert_id:'fixture',depth:'deep'}),getHuntEntityPrompt({entity:'evil.test',entity_type:'domain'}),getHuntCampaignPrompt({description:'fixture hunt'})]){
+  const text=prompt.messages[0].content.text;expect(text).toContain('prevalence at ingest time (stamp)');expect(text).toContain('current counts or unstamped artifacts');
+  for(const retired of ['get_prevalence','get_entity_risk_timeline','lookup_ioc','lookup_ip','get_entity_context'])expect(text).not.toContain(retired);
+ }
+ expect(TOOLS.find(t=>t.name==='lake_sql')!.description).not.toContain('b12.');
+ expect(TOOLS.find(t=>t.name==='lake_sql')!.description).toContain('returns the first stamp per row; use the artifact_type variant for IPs vs domains');
 });

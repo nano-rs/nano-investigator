@@ -24,7 +24,7 @@ CASE
   WHEN enrichments[6]['name'] = 'prevalence' AND enrichments[6]['provider'] = 'nano' THEN enrichments[6]['data']['host_count_saturated']
 END AS common,
 count(*) AS events
-FROM b12.conduit_proxy
+FROM <namespace>.<table>
 WHERE {window}
   AND (CASE
   WHEN enrichments[1]['name'] = 'prevalence' AND enrichments[1]['provider'] = 'nano' THEN enrichments[1]['data']['host_count']

@@ -107,6 +107,8 @@ import { SOAR_WORKFLOW_PROMPT, getSoarWorkflowPrompt } from './prompts/soar.js';
 
 // ==================== Tool Registry ====================
 
+const RETIRED_CELL_TOOLS = new Set(['get_prevalence', 'get_entity_risk_timeline', 'lookup_ioc', 'lookup_ip', 'get_entity_context']);
+
 const ALL_TOOLS = withPermissionRequirements([
   ...SEARCH_TOOLS,
   ...AGENT_LANE_TOOLS,
@@ -123,7 +125,7 @@ const ALL_TOOLS = withPermissionRequirements([
   ...INGESTION_TOOLS,
   ...RECON_TOOLS,
   ...SOAR_TOOLS,
-]);
+].filter(t => !RETIRED_CELL_TOOLS.has(t.name)));
 
 // Map tool names to their category handler
 const AGENT_LANE_TOOL_NAMES = new Set(AGENT_LANE_TOOLS.map(t => t.name));
@@ -193,6 +195,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+  if (RETIRED_CELL_TOOLS.has(name)) throw new Error("Retired cell tool; use guarded agent tools with reason after lake_sql discovery");
   const toolArgs = (args || {}) as Record<string, unknown>;
   const client = getClient();
 

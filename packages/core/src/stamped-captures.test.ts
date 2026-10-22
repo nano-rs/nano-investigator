@@ -13,7 +13,7 @@ it.each(readdirSync(dir).filter(n=>n.endsWith('.json')))('passes the real Basin 
  vi.stubGlobal('fetch',fetch);
  const result=await new NanosiemClient({apiUrl:'https://fixture.invalid/t/a',apiKey:'key-a'}).agentTool('lake_sql',args);
  expect(result.success).toBe(capture.success);
- if(capture.success){expect(result.data?.prevalence_semantics).toBe('prevalence at ingest time (stamp)');expect(result.data?.data).toMatchObject(capture.result);}
+ if(capture.success){expect(result.data?.prevalence_semantics).toBeUndefined();expect(result.data?.data).toMatchObject(capture.result);}
  expect(fetch).toHaveBeenCalledTimes(2);
 });
 it('keeps the flattened example inside the single-table window template and probes all six positions',()=>{
@@ -21,4 +21,17 @@ it('keeps the flattened example inside the single-table window template and prob
  expect(sql).toContain('WHERE {window}');expect(sql).not.toMatch(/FROM\s*\(/i);
  for(let i=1;i<=6;i++){expect(sql).toContain(`enrichments[${i}]['name']`);expect(sql).toContain(`enrichments[${i}]['provider']`);}
  expect(sql).toContain('BETWEEN 1 AND 2');
+});
+
+it('IP variant selects its own stamp in all five CASE expressions',()=>{
+ const sql=readFileSync(new URL('../../../docs/rare-ips-by-stamp.sql',import.meta.url),'utf8');
+ expect(sql).not.toMatch(/FROM\s*\(/i);expect(sql).toContain('FROM <namespace>.<table>');
+ for(let i=1;i<=6;i++)expect(sql.match(new RegExp(`enrichments\\[${i}\\]\\['data'\\]\\['artifact_type'\\] = 'ip_address'`,'g'))).toHaveLength(5);
+});
+
+it('the captured typed IP stamp follows the first domain stamp',()=>{
+ const capture=JSON.parse(readFileSync(new URL('select_enrichments_with_prevalence_proxy.json',dir),'utf8'));
+ const row=capture.result.rows.find((r: {enrichments: Array<{name:string;data?:{artifact_type?:string}}>})=>r.enrichments.some(e=>e.name==='prevalence' && e.data?.artifact_type==='ip_address'));
+ const stamps=row.enrichments.filter((e:{name:string})=>e.name==='prevalence');
+ expect(stamps[0].data.artifact_type).toBe('subdomain');expect(stamps.find((e:{data?:{artifact_type?:string}})=>e.data?.artifact_type==='ip_address').value).toBe('151.101.1.67');
 });

@@ -34,7 +34,7 @@ test('public catalog explains discovery, stamp selection and server-authenticate
 });
 
 test('playbooks, lake guide and shift briefing use stamps before heavy exceptions',async()=>{
- const retired=/get_prevalence|get_entity_context|lookup_ip|get_risky_entities|get_rare_artifacts|get_new_artifacts|get_risk_overview|get_entity_risk_activity/;
+ const retired=/get_prevalence|get_entity_risk_timeline|lookup_ioc|get_entity_context|lookup_ip|get_risky_entities|get_rare_artifacts|get_new_artifacts|get_risk_overview|get_entity_risk_activity/;
  const listed=await rpc('resources/list',{});
  const resources=listed.result?.resources ?? listed.resources;
  const guides=resources.filter(r=>r.uri==='nano://sql-guide'||r.uri.startsWith('nanosiem://reference/playbooks/'));

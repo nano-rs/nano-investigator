@@ -125,3 +125,10 @@ For hosted tenants use `https://us.nano.rs/t/<tenant-slug>` as the API base URL.
 Open-core deployments should set `NANOSIEM_DEPLOYMENT=open-core` so enterprise tools return an explicit unavailable message. Hosted case/notebook operations requiring browser sessions also return an actionable unavailable message. Ingestion tool migrations are listed in the capability matrix; other investigation tools retain their contracts. Durable searches poll and read verified pages within the configured timeout, with a maximum of 1000 output rows. Timeout errors include the job ID for inspection in nano; they never represent zero matches.
 
 The legacy MCP tools get_prevalence, get_entity_risk_timeline, lookup_ioc, lookup_ip, get_entity_context, get_rare_artifacts, get_new_artifacts, get_risky_entities, get_risk_overview and get_entity_risk_activity are retired. Use lake_sql stamps first, then guarded cell exceptions with narrow values, reason and bounded windows. Server budgets are 6 calls per authenticated API key per rolling hour, 30 per tenant per UTC day and 1 concurrent call per tool per tenant. Session IDs are audit labels only. lake_sql without sql discovers authorized catalog tables. See [stamped prevalence](docs/STAMPED-PREVALENCE.md).
+
+On hosted shared, API keys must use `POST /api/agent/features` for cell
+exceptions. Legacy heavy prevalence, risk/context, identity-resolution and
+lookup data routes refuse automation even if a reason is supplied; web UI
+sessions keep their existing behavior. The guarded bulk-prevalence and entity
+risk-timeline compatibility adapters remain available. Updating an older
+client must not introduce a fallback to an unguarded route.

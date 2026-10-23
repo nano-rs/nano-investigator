@@ -47,9 +47,9 @@ Gather data in parallel where possible, then present a concise briefing.
 - Any cases recently escalated or created?
 
 ## 3. RISK LANDSCAPE
-- Call get_risky_entities(limit=10) for top riskiest entities
-- Any entities with rapidly increasing risk scores?
-- Any new entities appearing on the risk list?
+- Use scoped lake_sql over the briefing window to find suspicious entities from events and inspect their ingest prevalence/IOC stamps first.
+- Only if a specific suspicious entity needs accumulated risk context, use guarded risk_scores with reason and start/end; never sweep the cell risk endpoints.
+- If unavailable or budget-limited, state the evidence gap and continue with the lake findings.
 
 ## 4. DETECTION HEALTH
 - Call list_detections to check for rules with unusual match volumes

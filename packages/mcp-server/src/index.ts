@@ -107,7 +107,7 @@ import { SOAR_WORKFLOW_PROMPT, getSoarWorkflowPrompt } from './prompts/soar.js';
 
 // ==================== Tool Registry ====================
 
-const RETIRED_CELL_TOOLS = new Set(['get_prevalence', 'get_entity_risk_timeline', 'lookup_ioc', 'lookup_ip', 'get_entity_context']);
+const RETIRED_CELL_TOOLS = new Set(['get_prevalence', 'get_entity_risk_timeline', 'lookup_ioc', 'lookup_ip', 'get_entity_context', 'get_rare_artifacts', 'get_new_artifacts', 'get_risky_entities', 'get_risk_overview', 'get_entity_risk_activity']);
 
 const ALL_TOOLS = withPermissionRequirements([
   ...SEARCH_TOOLS,

@@ -4,11 +4,12 @@
 
 ## Time Range Defaults
 
-- **Broad/exploratory queries**: Default to `-1d` (e.g. "what has this user been up to?", "show me top domains")
-- **Targeted IOC/entity lookups**: Up to `-7d` if needed
-- **Aggregation/stats queries**: Up to `-7d` is fine since they're lightweight
-- **Only go beyond -7d** if the analyst explicitly requests it or a narrower search returned 0 results
-- **Never default to -30d** — it's too broad and slow for most investigations
+- All agent lane tools (`lake_sql`, `prevalence`, `risk_scores`, `resolve_identity`, `lookup`) take `start` and `end`; default last 24h, or case alert ±1h with `case_context`.
+- Named dates are literal: 10/16 means that day's local midnight to the next midnight in the analyst's IANA time zone. Never substitute rolling 24h for an explicit date.
+- Echo the absolute window and time zone in every answer. Wider than 7d requires a visible `widen_reason`.
+- Empty/thin results: offer 24h → 7d → 30d; never silently widen or retry a charged query. Case first-seen lookbacks may widen for a stated case reason, each as its own visible step.
+- `resolve_identity` is an as-of IP match: pass the event timestamp, or the window end. Report `observed_at`. Only directory attributes and lookup tables are current snapshots.
+- Use `lake_sql` only for sealed hours, one source table per query with `WHERE {window}` and no custom time predicate. Recent unsealed hours stay on nPL `search`. For prevalence use the lake_sql ingest stamp first. Cell prevalence is only for current counts or unstamped artifacts (65535). All four cell features require a narrow known entity and one-sentence reason; budgets are 6/authenticated API key/rolling hour, 30/tenant/day, 1 concurrent/tool/tenant. Back off on budget errors. Report requested_window and effective_window for whole-part prevalence.
 
 ## Query Building Rules
 
@@ -21,7 +22,7 @@
   metadata.event_code=4625                                         ← slow (scans all source types)
   ```
 - **Use canonical OCSF 1.9 field paths** — call `get_schema` before constructing queries. Common fields: `actor.user.name`, `src_endpoint.ip`, `dst_endpoint.ip`, `device.hostname`, `metadata.log_source`, `process.file.path`, `process.cmd_line`, `time`, `class_uid`, `activity_id`. Use `get_field_values` to confirm observed values. Do not invent fields or assume every source populates them.
-- **Deployment capabilities** — hosted raw SQL is unavailable; use nPL. Open core has alerts, search and prevalence; cases, notebooks, risk and entity-context endpoints require enterprise. Report unavailable capabilities clearly.
+- **Deployment capabilities** — hosted legacy `search_sql` is unavailable; use nPL for fresh data and `lake_sql` for sealed hours. Open core has alerts, search and prevalence; cases, notebooks, risk and entity-context endpoints require enterprise. Report unavailable capabilities clearly.
 
 - **Free text search** — Just search the term: `connection refused`, `svchost.exe`
 - **Field searches** — `src_endpoint.ip="10.0.0.1"`, `actor.user.name=admin`, `status=500`
@@ -33,7 +34,7 @@
 **Scope → Enrich → Correlate → Present → Recommend**
 
 1. **Scope** — Read the alert/event. Identify entities. Set time window. Call `get_source_types` to discover available log sources (never assume source type names).
-2. **Enrich** — For each entity: get_entity_context, prevalence, GeoIP/IOC.
+2. **Enrich** — Use scoped lake_sql to inspect ingest prevalence and IOC stamps first; guarded cell tools only answer a specific remaining question, with reason.
 3. **Correlate** — Related alerts? Related cases? Build timeline.
 4. **Present** — Summarize findings at each checkpoint. Don't silently investigate.
 5. **Recommend** — FP/TP assessment, immediate actions, follow-ups.
@@ -59,20 +60,20 @@ This is different from starting a fresh investigation from an alert — `review_
 
 ## Entity Investigation Patterns
 
-- **IP** — get_entity_context → lookup_ip → search activity → check alerts/cases
-- **User** — get_entity_context → search auth activity → check privilege escalation → check off-hours
-- **Host** — get_entity_context → search processes → check network connections → check prevalence
-- **Hash** — get_prevalence → lookup_ioc → search all hosts with this hash → check first seen
-- **Domain** — get_prevalence → lookup_ioc → search DNS + proxy logs → check subdomains
+- **IP** — lake_sql stamps → guarded lookup if needed → search recent activity → check alerts/cases
+- **User** — lake_sql stamps → search auth activity → check privilege escalation → check off-hours
+- **Host** — lake_sql stamps → search processes → check network connections → check prevalence
+- **Hash** — lake_sql stamps → guarded lookup only if needed → search all hosts with this hash → check first seen
+- **Domain** — lake_sql stamps → guarded lookup only if needed → search DNS + proxy logs → check subdomains
 
 ## Identity Resolution (Host ↔ IP ↔ User)
 
-Use observed OCSF identities (`src_endpoint.ip`, `dst_endpoint.ip`, `device.hostname`, `actor.user.name`) within a bounded time window. On hosted, use `get_entity_context` to collect risk, alerts and cases. On open core use `search` and `get_prevalence`. Never assume an IP-to-host mapping or a legacy storage table exists; establish mappings from observed events and record their time window.
+Use observed OCSF identities (`src_endpoint.ip`, `dst_endpoint.ip`, `device.hostname`, `actor.user.name`) within a bounded time window. On hosted, use scoped lake_sql and guarded risk_scores only for a known suspicious entity. On open core use `search`; guarded capabilities fail closed if unavailable. Never assume an IP-to-host mapping or a legacy storage table exists; establish mappings from observed events and record their time window.
 
 ## Query Refinement Protocol
 
 After every search, evaluate the results:
-- **0 results** → Check field values (get_field_values). Check source_type exists. Widen time range.
+- **0 results** → Check field values (get_field_values) and source availability. Offer the next time range; never silently widen.
 - **1-100 results** → Good. Analyze directly.
 - **100-1000** → Summarize with stats, drill down on interesting groups.
 - **1000-10000** → Too many. Add filters, narrow time, use stats aggregation.

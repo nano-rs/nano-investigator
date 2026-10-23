@@ -88,6 +88,9 @@ import { withPermissionRequirements } from './tool-permissions.js';
 
 import { INGESTION_TOOLS, handleIngestionTool } from './tools/ingestion.js';
 
+import { TOOLS as AGENT_LANE_TOOLS, handleAgentLaneTool } from './tools/agent-lane.js';
+import type { AgentToolName } from '@nano-rs/investigator-core';
+
 // Resources
 import { UDM_SCHEMA_RESOURCE, UDM_SCHEMA_CONTENT, UDM_SCHEMA_URI } from './resources/udm-schema.js';
 import { NPL_REFERENCE_RESOURCE, NPL_REFERENCE_CONTENT, NPL_REFERENCE_URI } from './resources/npl-reference.js';
@@ -104,8 +107,11 @@ import { SOAR_WORKFLOW_PROMPT, getSoarWorkflowPrompt } from './prompts/soar.js';
 
 // ==================== Tool Registry ====================
 
+const RETIRED_CELL_TOOLS = new Set(['get_prevalence', 'get_entity_risk_timeline', 'lookup_ioc', 'lookup_ip', 'get_entity_context', 'get_rare_artifacts', 'get_new_artifacts', 'get_risky_entities', 'get_risk_overview', 'get_entity_risk_activity']);
+
 const ALL_TOOLS = withPermissionRequirements([
   ...SEARCH_TOOLS,
+  ...AGENT_LANE_TOOLS,
   ...ALERTS_TOOLS,
   ...CASES_TOOLS,
   ...NOTEBOOKS_TOOLS,
@@ -119,9 +125,10 @@ const ALL_TOOLS = withPermissionRequirements([
   ...INGESTION_TOOLS,
   ...RECON_TOOLS,
   ...SOAR_TOOLS,
-]);
+].filter(t => !RETIRED_CELL_TOOLS.has(t.name)));
 
 // Map tool names to their category handler
+const AGENT_LANE_TOOL_NAMES = new Set(AGENT_LANE_TOOLS.map(t => t.name));
 const SEARCH_TOOL_NAMES = new Set(SEARCH_TOOLS.map((t) => t.name));
 const ALERTS_TOOL_NAMES = new Set(ALERTS_TOOLS.map((t) => t.name));
 const CASES_TOOL_NAMES = new Set(CASES_TOOLS.map((t) => t.name));
@@ -188,9 +195,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+  if (RETIRED_CELL_TOOLS.has(name)) throw new Error("Retired cell tool; use guarded agent tools with reason after lake_sql discovery");
   const toolArgs = (args || {}) as Record<string, unknown>;
   const client = getClient();
 
+  if (AGENT_LANE_TOOL_NAMES.has(name as AgentToolName)) return handleAgentLaneTool(name as AgentToolName, toolArgs, client);
   if (SEARCH_TOOL_NAMES.has(name)) return handleSearchTool(name, toolArgs, client);
   if (ALERTS_TOOL_NAMES.has(name)) return handleAlertsTool(name, toolArgs, client);
   if (CASES_TOOL_NAMES.has(name)) return handleCasesTool(name, toolArgs, client);

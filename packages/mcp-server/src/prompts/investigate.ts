@@ -1,3 +1,4 @@
+import { AGENT_WINDOW_GUIDANCE } from './agent-window.js';
 /**
  * Alert investigation prompt
  */
@@ -34,7 +35,9 @@ export function getInvestigatePrompt(args: Record<string, string | undefined>): 
         role: 'user',
         content: {
           type: 'text',
-          text: `You are investigating alert ${alertId} from nano.
+          text: `${AGENT_WINDOW_GUIDANCE}
+
+You are investigating alert ${alertId} from nano.
 
 Investigation depth: ${depth}
 
@@ -49,16 +52,15 @@ Follow this investigation process:
    - Do any suspicious_when conditions apply? If so, lean toward true positive.
    - What additional context does the hints suggest gathering?
 
-4. **ENRICH** key entities — for each IP, actor.user.name, or host in the matched events:
-   - Call get_entity_context to get risk score, alert history, and activity summary
-   - For external IPs, call lookup_ip for GeoIP; for threat intel, check the ioc_matched / ioc_threat_type / ioc_confidence columns in search results (populated at ingest)
-   - For hashes/domains, check prevalence with get_prevalence
+4. **READ STAMPS FIRST** — use lake_sql for sealed hours, scoped to the alert's entity and source, and inspect the prevalence at ingest time (stamp) and ingest IOC matches. Discover namespace/table by calling lake_sql without sql. Recent unsealed data uses search.
+   - Only when current counts or unstamped artifacts (65535) matter, call guarded prevalence on at most 10 known values with a one-sentence reason.
+   - Only for a specific unresolved question use guarded risk_scores, resolve_identity (event timestamp) or lookup, each with reason and explicit bounds. Never enrich every hit or sweep.
 
 5. **SEARCH** for related activity — run 1-2 focused queries to expand context:
    - What else did the alerting entity do around the same time?
    - Are there similar patterns from other entities? Scope that search by the alert's source (\`metadata.log_source=…\`) or class, not a bare \`*\`.
    - Start every query with a source, class, entity or keyword term. A bare \`*\` reads every source and slows every other query; if one is truly needed keep the window to 4h or less.
-   - Tool choice: use search with OCSF field paths; use get_prevalence and get_entity_context for enrichment. Hosted tenants do not expose raw SQL.
+   - Tool choice: use search with OCSF field paths; read stamped prevalence in lake_sql first. Use lake_sql for sealed hours and bounded cell feature tools for enrichment.
 
 6. **CHECK HISTORY** — call get_related_cases to see if we've investigated this before:
    - If a related case exists, what was the disposition? Was it FP or TP?
@@ -70,7 +72,7 @@ Follow this investigation process:
    - **TRUE POSITIVE** → Explain impact, recommend immediate actions (block, isolate, escalate)
 
 ${depth === 'quick' ? 'QUICK MODE: Limit to steps 1-3 only. Read alert and rule, make a quick assessment.' : ''}
-${depth === 'deep' ? 'DEEP MODE: Be thorough. Follow all branches, check prevalence for all artifacts, build a complete timeline.' : ''}
+${depth === 'deep' ? 'DEEP MODE: Be thorough. Follow all branches, read ingest stamps for the scoped artifacts, build a complete timeline.' : ''}
 
 IMPORTANT: Do NOT investigate more than 2 levels deep without presenting findings and asking the analyst for direction on next steps.`,
         },

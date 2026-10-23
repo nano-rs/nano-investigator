@@ -1,0 +1,62 @@
+import {getInvestigatePrompt} from '../prompts/investigate.js';
+import {getHuntEntityPrompt} from '../prompts/hunt.js';
+import { getHuntCampaignPrompt } from '../prompts/hunt.js';
+import { afterEach, expect, it, vi } from 'vitest';
+import { NanosiemClient } from '@nano-rs/investigator-core';
+import { TOOLS, handleAgentLaneTool } from './agent-lane.js';
+import { withPermissionRequirements } from '../tool-permissions.js';
+afterEach(() => vi.unstubAllGlobals());
+it('registers all five read tools with bounded arguments and authoritative permission metadata', () => {
+  expect(TOOLS.map(t => t.name)).toEqual(['lake_sql', 'prevalence', 'risk_scores', 'resolve_identity', 'lookup']);
+  for (const tool of withPermissionRequirements(TOOLS)) {
+    expect(tool.annotations.readOnlyHint).toBe(true);
+    expect(tool.inputSchema.additionalProperties).toBe(false);
+    expect(tool.inputSchema.properties).toHaveProperty('start');
+    expect(tool.inputSchema.properties).toHaveProperty('end');
+    expect(tool.description).toContain('never automatically retry or widen');
+    expect(tool._meta['io.nano/permission-requirements']).toBeTruthy();
+  }
+});
+it.each(TOOLS.map(t => t.name))('%s returns the window on refusal through the production client', async name => {
+  const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+  const sdk = new NanosiemClient({ apiUrl: 'https://us.nano.rs/t/a', apiKey: 'key-a' });
+  const result = await handleAgentLaneTool(name, { start: '2026-10-16', end: '2026-10-17', tenant_id: 'foreign' }, sdk);
+  expect(result.isError).toBe(true);
+  expect(JSON.parse(result.content[0].text)).toMatchObject({ window: { start: '2026-10-16T00:00:00.000Z', end: '2026-10-17T00:00:00.000Z' }, error: { code: 'AGENT_TOOL_REFUSED' } });
+  expect(fetch).not.toHaveBeenCalled();
+});
+it('resolves the same IP at two event times through the MCP handler', async () => {
+  const fetch = vi.fn(async (_url: string, options: RequestInit) => {
+    const req=JSON.parse(String(options.body));const timestamp=req.input.timestamp;
+    return new Response(JSON.stringify({window:{start:req.start,end:req.end,time_zone:req.time_zone,widen_reason:null},data:{match:{last_seen:timestamp,hostname:timestamp?.startsWith('2026-10-16T01')?'first':'second'}}}));
+  });
+  vi.stubGlobal('fetch', fetch);
+  const sdk = new NanosiemClient({ apiUrl: 'https://us.nano.rs/t/a', apiKey: 'key-a' });
+  const run = async (timestamp: string) => JSON.parse((await handleAgentLaneTool('resolve_identity', { reason: 'Attribute the suspicious event.', ip: '192.0.2.1', timestamp, start: '2026-10-16', end: '2026-10-17' }, sdk)).content[0].text);
+  expect((await run('2026-10-16T01:00:00Z')).data).toMatchObject({ match: { hostname: 'first' }, observed_at: '2026-10-16T01:00:00.000Z' });
+  expect((await run('2026-10-16T02:00:00Z')).data).toMatchObject({ match: { hostname: 'second' }, observed_at: '2026-10-16T02:00:00.000Z' });
+});
+
+it('campaign guidance uses the bounded lane and a 24h default, without the legacy SQL escape hatch', () => {
+  const prompt = getHuntCampaignPrompt({ description: 'fixture hunt' }).messages[0].content.text;
+  expect(prompt).toContain('Time range: -24h');
+  expect(prompt).toContain('WHERE {window}');
+  expect(prompt).toContain('never silently widen');
+  expect(prompt).not.toContain('reach for `search_sql`');
+});
+
+it('puts stamp-first guidance and enforceable cell restrictions in the public tool catalog',()=>{
+ const lake=TOOLS.find(t=>t.name==='lake_sql')!;
+ expect(lake.description).toContain('prevalence at ingest time (stamp)');expect(lake.description).toContain('enrichments[6]');
+ for(const tool of TOOLS.filter(t=>t.name!=='lake_sql')){expect(tool.inputSchema.required).toContain('reason');expect(tool.description).toContain('6 calls per authenticated API key per rolling hour');expect(tool.description).toContain('30 calls per tenant');}
+ expect(TOOLS.find(t=>t.name==='prevalence')!.description).toContain('call this only for current counts or unstamped artifacts');
+});
+
+it('all hunt and investigation workflows start with stamps and exclude retired tools',()=>{
+ for(const prompt of [getInvestigatePrompt({alert_id:'fixture',depth:'deep'}),getHuntEntityPrompt({entity:'evil.test',entity_type:'domain'}),getHuntCampaignPrompt({description:'fixture hunt'})]){
+  const text=prompt.messages[0].content.text;expect(text).toContain('prevalence at ingest time (stamp)');expect(text).toContain('current counts or unstamped artifacts');
+  for(const retired of ['get_prevalence','get_entity_risk_timeline','lookup_ioc','lookup_ip','get_entity_context'])expect(text).not.toContain(retired);
+ }
+ expect(TOOLS.find(t=>t.name==='lake_sql')!.description).not.toContain('b12.');
+ expect(TOOLS.find(t=>t.name==='lake_sql')!.description).toContain('returns the first stamp per row; use the artifact_type variant for IPs vs domains');
+});

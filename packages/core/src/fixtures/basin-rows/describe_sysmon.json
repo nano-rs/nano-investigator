@@ -1,0 +1,664 @@
+{
+ "result": {
+  "request_id": "dqe-prod-01M5JT4HJ1056W96KEACB636D5",
+  "schema": [
+   {
+    "name": "column_name",
+    "descriptor": {
+     "type": {
+      "name": "string"
+     },
+     "nullable": false
+    }
+   },
+   {
+    "name": "type",
+    "descriptor": {
+     "type": {
+      "name": "string"
+     },
+     "nullable": false
+    }
+   },
+   {
+    "name": "required",
+    "descriptor": {
+     "type": {
+      "name": "string"
+     },
+     "nullable": false
+    }
+   },
+   {
+    "name": "initial_default",
+    "descriptor": {
+     "type": {
+      "name": "string"
+     },
+     "nullable": false
+    }
+   },
+   {
+    "name": "write_default",
+    "descriptor": {
+     "type": {
+      "name": "string"
+     },
+     "nullable": false
+    }
+   },
+   {
+    "name": "doc",
+    "descriptor": {
+     "type": {
+      "name": "string"
+     },
+     "nullable": false
+    }
+   }
+  ],
+  "rows": [
+   {
+    "column_name": "time",
+    "type": "TIMESTAMPTZ",
+    "required": "true",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "metadata",
+    "type": "STRUCT<uid TEXT, tenant_uid TEXT, version TEXT, log_source TEXT, log_name TEXT, logged_time BIGINT, processed_time BIGINT, product STRUCT<name TEXT, vendor_name TEXT, feature STRUCT<name TEXT>>, log_level TEXT, profiles TEXT[], event_code TEXT, log_provider TEXT, original_event_uid TEXT, correlation_uid TEXT, nano_credential_id TEXT, nano_parser_bundle_sha256 TEXT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "activity_id",
+    "type": "BIGINT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "activity_name",
+    "type": "TEXT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "category_name",
+    "type": "TEXT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "category_uid",
+    "type": "BIGINT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "class_name",
+    "type": "TEXT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "class_uid",
+    "type": "BIGINT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "message",
+    "type": "TEXT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "raw_data",
+    "type": "TEXT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "raw_data_size",
+    "type": "BIGINT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "severity",
+    "type": "TEXT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "severity_id",
+    "type": "BIGINT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "type_name",
+    "type": "TEXT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "type_uid",
+    "type": "BIGINT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "unmapped",
+    "type": "STRUCT<raw_event TEXT, event_data.rule_name TEXT, event_data.utc_time TEXT, keywords TEXT, level TEXT, level_value BIGINT, process_id BIGINT, provider_guid TEXT, task BIGINT, task_name TEXT, thread_id BIGINT, user_id TEXT, user_name TEXT, version BIGINT, event_data.destination_hostname TEXT, event_data.destination_is_ipv_6 TEXT, event_data.destination_port_name TEXT, event_data.source_is_ipv_6 TEXT, event_data.source_port_name TEXT, event_data.call_trace TEXT, event_data.terminal_session_id TEXT, cache_status TEXT, threat_signals TEXT, tls_intercepted BOOLEAN, upstream_addr TEXT, event_data.mandatory_label TEXT, event_data.subject_logon_id TEXT, event_data.token_elevation_type TEXT, host TEXT, keyword_names TEXT[], record_id BIGINT, event_data.elevated_token TEXT, event_data.impersonation_level TEXT, event_data.key_length TEXT, event_data.lm_package_name TEXT, event_data.logon_guid TEXT, event_data.logon_process_name TEXT, event_data.process_id TEXT, event_data.process_name TEXT, event_data.subject_domain_name TEXT, event_data.subject_user_name TEXT, event_data.subject_user_sid TEXT, event_data.privilege_list TEXT, event_data.sub_status TEXT, message TEXT, protocol TEXT, referrer TEXT, additional_event_data.authentication_method TEXT, additional_event_data.cipher_suite TEXT, additional_event_data.mfa_used TEXT, additional_event_data.signature_version TEXT, event_category TEXT, event_source TEXT, event_type TEXT, event_version TEXT, management_event BOOLEAN, nanosiem.caller_type TEXT, nanosiem.change_type TEXT, nanosiem.cloud_service TEXT, nanosiem.resource_name TEXT, nanosiem.resource_type TEXT, request_parameters.table_name TEXT, resources TEXT, user_identity.access_key_id TEXT, user_identity.principal_id TEXT, read_only BOOLEAN, request_parameters.resource_name TEXT, error_code TEXT, error_message TEXT, user_identity.session_context.attributes.creation_date TEXT, user_identity.session_context.session_issuer.account_id TEXT, user_identity.session_context.session_issuer.arn TEXT, user_identity.session_context.session_issuer.principal_id TEXT, user_identity.session_context.session_issuer.type TEXT, request_parameters.d_b_instance_identifier TEXT, request_parameters.instances_set.items TEXT, request_parameters.group_id TEXT, request_parameters.ip_permissions.items TEXT, request_parameters.function_name TEXT, request_parameters.secret_id TEXT, request_parameters.role_arn TEXT, request_parameters.role_session_name TEXT, request_parameters.bucket_name TEXT, request_parameters.policy TEXT, response_elements.instances_set.items TEXT, event_data.is_executable TEXT, request_parameters.policy_arn TEXT, request_parameters.user_name TEXT, request_parameters.role_name TEXT, request_parameters.key_id TEXT, request_parameters.handler TEXT, request_parameters.memory_size BIGINT, request_parameters.runtime TEXT, request_parameters.billing_mode TEXT, response_elements.access_key.access_key_id TEXT, response_elements.access_key.status TEXT, response_elements.access_key.user_name TEXT, request_parameters.description TEXT, request_parameters.key_usage TEXT, request_parameters.image_id TEXT, request_parameters.instance_type TEXT, request_parameters.key_name TEXT, request_parameters.max_count BIGINT, request_parameters.min_count BIGINT, request_parameters.subnet_id TEXT, request_parameters.name TEXT, request_parameters.change_batch.changes TEXT, request_parameters.hosted_zone_id TEXT, request_parameters.d_b_instance_class TEXT, request_parameters.engine TEXT, request_parameters.scheme TEXT, request_parameters.type TEXT, request_parameters.group_description TEXT, request_parameters.group_name TEXT, request_parameters.vpc_id TEXT, request_parameters.public_access_block_configuration.block_public_acls BOOLEAN, request_parameters.public_access_block_configuration.block_public_policy BOOLEAN, request_parameters.public_access_block_configuration.ignore_public_acls BOOLEAN, request_parameters.public_access_block_configuration.restrict_public_buckets BOOLEAN, request_parameters.cidr_block TEXT, response_elements.key_metadata.arn TEXT, response_elements.key_metadata.key_id TEXT, response_elements.key_metadata.key_state TEXT, nano_e_2_e_marker TEXT, auth_method TEXT, username TEXT, alert_id TEXT, matched_events_redacted BOOLEAN, matched_events_sample TEXT[], nano_compact_finding TEXT, nano_finding_outbox_trusted TEXT, raw_risk_score BIGINT, realtime BOOLEAN, rule_mode TEXT, signal_type TEXT, event_data.hashes TEXT, risk_factors TEXT[], span_id TEXT, trace_id TEXT, referer TEXT, user_agent TEXT, action TEXT, actor_id TEXT, actor_name TEXT, api_key_id TEXT, api_key_name TEXT, details STRUCT<authority_ledger TEXT, key_revision BIGINT, owner_user_id TEXT, authenticated_at TEXT, database_principal TEXT, initiator_known BOOLEAN, mfa_authenticated_at TEXT, session_expires_at TEXT, state_operation TEXT, action TEXT, activation_revision TEXT, bundle_id TEXT, bundle_revision TEXT, cell_generation TEXT, content_sha256 TEXT, from_activation_revision TEXT, from_bundle_id TEXT, from_bundle_revision TEXT, generation_change BOOLEAN, generation_rolled BOOLEAN, hec_config_sha256 TEXT, hec_sources TEXT[], issue TEXT, manifest_sha256 TEXT, new_bundle BOOLEAN, object_key TEXT, origin TEXT, output_guard_sha256 TEXT, previous_activation_revision TEXT, promote_request_id TEXT, reason TEXT, release_sha256 TEXT, replayed BOOLEAN, roll_id TEXT, runtime_image_digest TEXT, signing_key_id TEXT, state TEXT, templates_created BIGINT, templates_reactivated BIGINT, templates_suspended BIGINT, tenant_id TEXT, verification STRUCT<candidate_worker_version TEXT, ingress_contract TEXT, previous_worker_version TEXT, probed_sources TEXT[], timings_ms STRUCT<build_ms BIGINT, control_roll_ms BIGINT, lock_ms BIGINT, queue_ms BIGINT, rerender_ms BIGINT, sign_ms BIGINT, verify_ms BIGINT>, verify_mode TEXT>, protocol TEXT, retired_route_ids TEXT[], digest_key_id TEXT, request_id TEXT, route_id TEXT, source_authority STRUCT<cell_assignment_revision TEXT, cell_generation TEXT, cell_id TEXT, cell_name TEXT, credential_id TEXT, digest_key_id TEXT, enrolled_hec_config_sha256 TEXT, enrolled_hec_sources TEXT[], enrolled_output_guard_sha256 TEXT, parser_activation_revision TEXT, parser_bundle_id TEXT, parser_bundle_object_key TEXT, parser_bundle_revision TEXT, parser_bundle_sha256 TEXT, parser_manifest_sha256 TEXT, parser_manifest_signature TEXT, parser_signature_key_id TEXT, parser_signing_public_key TEXT, parser_source_revision TEXT, plan_assignment_revision TEXT, protocol TEXT, route_id TEXT, route_revision TEXT, route_template BOOLEAN, runtime_image_digest TEXT, source_slug TEXT, tenant_id TEXT, tenant_slug TEXT>, source_slug TEXT, template_route_id TEXT, connection_limit BIGINT, created BOOLEAN, assignment_revision BIGINT, entry_id TEXT, entry_type TEXT, grant_authority_revision BIGINT, plan_revision BIGINT, source TEXT, base_content_sha256 TEXT, failure_component TEXT, superseded_offer_id TEXT, validation_state TEXT, abandon_request_id TEXT, failure STRUCT<component TEXT, detail TEXT>, duration_ms BIGINT, provider_id TEXT, users_synced BIGINT, users_tombstoned BIGINT, phase TEXT, bytes BIGINT, decision TEXT, host TEXT, redirect_hops BIGINT, search_id TEXT, user_id TEXT, via_proxy BOOLEAN, method TEXT, path TEXT, user_permissions TEXT[], added_sources TEXT[], base_offer_id TEXT, rollout_request_ids TEXT[], evidence STRUCT<report_sha256 TEXT, stage_timings STRUCT<build_ms BIGINT, lock_ms BIGINT, queue_ms BIGINT, sign_ms BIGINT>, failure_component TEXT, failure_reason TEXT>, from_state TEXT, rollout_id TEXT, kind TEXT, log_source_id TEXT, publication_id TEXT, version_number BIGINT, shared_registry BOOLEAN, success BOOLEAN, failed BIGINT, updated BIGINT, calls BIGINT, credits BIGINT, model_id TEXT, provider TEXT, provider_credential_revision BIGINT, purpose TEXT, run_id TEXT, status TEXT, credential_id TEXT, source_slugs TEXT[], requested_by TEXT, sealed_expires_at TEXT, restricted_sources_acknowledged BOOLEAN, reveal_key_alg TEXT, members_removed BIGINT, weight DOUBLE, enabled BOOLEAN, members_added BIGINT, archived BOOLEAN, mode TEXT, plan_assignment_revision BIGINT, retired_source_assignments BIGINT, assigned_to TEXT, severity TEXT, ai_enabled BOOLEAN, ai_tier TEXT, ai_tier_changed BOOLEAN, ai_tuning_mode TEXT, ai_tuning_mode_changed BOOLEAN, allow_external_url_fetch BOOLEAN, allow_log_samples_in_prompts BOOLEAN, background_ai_daily_credit_cap BIGINT, background_ai_daily_credit_cap_auto BOOLEAN, background_ai_enabled BOOLEAN, background_ai_max_calls_per_run BIGINT, organizational_context_changed BOOLEAN, triage_policy STRUCT<dedupe TEXT, mode TEXT, order TEXT, sample_percent BIGINT>, detection_mode TEXT, execution_mode TEXT, before STRUCT<enabled BOOLEAN, name TEXT, review_at TEXT, weight DOUBLE>, changed STRUCT<enabled BOOLEAN>, group_id TEXT, denied_sources TEXT[], entry_point TEXT, outcome TEXT, query TEXT, restricted_sources TEXT[], evidence_rows BIGINT, source_visibility_bypass TEXT, surface TEXT, disposition TEXT, previous_status TEXT, self_service BOOLEAN, alert_count BIGINT, alert_id TEXT, grouping_rule TEXT, system BOOLEAN, via TEXT, affects_deployment BOOLEAN, parser_changed BOOLEAN, grouping_type TEXT, visibility TEXT, notified BIGINT, previous TEXT[], public_suffix_added BOOLEAN, removed TEXT[], added TEXT[], public_suffixes_added TEXT[], suffixes TEXT[], next_run_at TEXT, source_assignment_revision BIGINT, source_route_id TEXT, source_route_revision BIGINT, cell_id TEXT, route_template BOOLEAN, changes STRUCT<query STRUCT<from TEXT, to TEXT>, mode STRUCT<from TEXT, to TEXT>>, previous_updated_at TEXT, updated_at TEXT, version_id BIGINT, result_version_id BIGINT, target_version_id BIGINT, cleared_count BIGINT, entity TEXT, entity_type TEXT, related_case_linked TEXT, import_type TEXT, repository_id TEXT, validated BOOLEAN, automatic BOOLEAN, rule_format TEXT, url TEXT, tokens_valid_from TEXT, detection STRUCT<assignment_revision BIGINT, grant_authority_revision BIGINT, outcome TEXT, worker_actor_id TEXT, worker_identity TEXT, renewed_stale_grant_authority_revision BIGINT, superseded_assignment_revision BIGINT>, search STRUCT<assignment_revision BIGINT, outcome TEXT, worker_identity TEXT, worker_revision BIGINT>, system_worker_user_id TEXT, otlp_sources TEXT[], routes_adopted BIGINT, routes_created BIGINT, readiness STRUCT<stage TEXT>, validation_report_sha256 TEXT, generation BIGINT, issue_id TEXT, last_event_at TEXT, message TEXT, minutes_since_last_event BIGINT, recipients BIGINT, recipients_withheld_source_visibility BIGINT, stale_threshold_minutes BIGINT, limit BIGINT, source_labels TEXT[], window_end TEXT, window_start TEXT, expected_events BIGINT, issue_key TEXT, observed_events BIGINT, segment_dimension TEXT, segment_value TEXT, active_bundle_sha256 TEXT, duration_seconds BIGINT, max_bytes BIGINT, max_events BIGINT, retain_until TEXT, stage TEXT, existing_identity BOOLEAN, expires_at TEXT, invitation_id TEXT, role_id TEXT, membership_id TEXT, mfa_enrollment_required BOOLEAN, plan_code TEXT, previous_tokens_valid_from TEXT, membership_status TEXT, operation TEXT, mfa_verified BOOLEAN, error TEXT, has_generated_sql BOOLEAN, query_mode TEXT, indicators BIGINT, expired BIGINT, published BIGINT, snapshot_id TEXT, snapshot_sha256 TEXT, after BIGINT, expiry STRUCT<action TEXT, expires_at TEXT>, purged_expired BIGINT, withdrawn BOOLEAN, group_ids TEXT[], lifecycle_status TEXT, source_type TEXT, key_prefix TEXT, permissions TEXT[], tenant_slug TEXT, imported BIGINT, skipped BIGINT, repository_path TEXT, demo_expires_at TEXT, demo_session_id TEXT>, resource_id TEXT, resource_name TEXT, resource_type TEXT, source TEXT, success BOOLEAN, nano_src_endpoint TEXT, nano_actor TEXT, nano_coerced TEXT, resource STRUCT<name TEXT, type TEXT, uid TEXT>>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "actor",
+    "type": "STRUCT<user STRUCT<name TEXT, domain TEXT, uid TEXT, type TEXT, email_addr TEXT, credential_uid TEXT>, process STRUCT<cmd_line TEXT, file STRUCT<name TEXT, path TEXT, type_id BIGINT>, name TEXT, pid BIGINT, uid TEXT, ptid BIGINT, user STRUCT<name TEXT>>, session STRUCT<uid TEXT, uuid TEXT, is_mfa BOOLEAN>, app_name TEXT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "api",
+    "type": "STRUCT<operation TEXT, service STRUCT<name TEXT>, request STRUCT<uid TEXT>>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "cloud",
+    "type": "STRUCT<provider TEXT, account STRUCT<name TEXT, uid TEXT>, region TEXT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "src_endpoint",
+    "type": "STRUCT<ip TEXT, hostname TEXT, port BIGINT, autonomous_system STRUCT<name TEXT, number BIGINT>, location STRUCT<continent TEXT, country TEXT>, name TEXT, svc_name TEXT, type TEXT, type_id BIGINT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "status_id",
+    "type": "BIGINT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "device",
+    "type": "STRUCT<hostname TEXT, type_id BIGINT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "module",
+    "type": "STRUCT<file STRUCT<company_name TEXT, desc TEXT, hashes STRUCT<algorithm_id BIGINT, value TEXT>[], internal_name TEXT, name TEXT, path TEXT, product STRUCT<name TEXT>, signatures STRUCT<algorithm TEXT, algorithm_id BIGINT, developer_uid TEXT, serialization TEXT, serialization_id BIGINT, state TEXT, state_id BIGINT>[], type_id BIGINT, version TEXT>, load_type_id BIGINT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "status",
+    "type": "TEXT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "connection_info",
+    "type": "STRUCT<direction_id BIGINT, protocol_num BIGINT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "dst_endpoint",
+    "type": "STRUCT<autonomous_system STRUCT<name TEXT, number BIGINT>, ip TEXT, location STRUCT<continent TEXT, country TEXT>, port BIGINT, svc_name TEXT, hostname TEXT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "enrichments",
+    "type": "STRUCT<data STRUCT<admitted_at TEXT, as_domain TEXT, continent_code TEXT, contract_version BIGINT, country_name TEXT, feed_class TEXT, feed_id TEXT, feed_revision_id BIGINT, freshness_at_ingest TEXT, mapping_revision BIGINT, owned_fields TEXT[], payload_digest TEXT, status TEXT, upstream_at TEXT, valid_until TEXT, detector TEXT, score DOUBLE, tier TEXT, artifact_type TEXT, as_of TEXT, first_seen TEXT, host_count BIGINT, host_count_saturated BOOLEAN, is_new BOOLEAN, is_rare BOOLEAN, last_seen TEXT, prevalence_score BIGINT, total_occurrences BIGINT, confidence BIGINT, ioc_type TEXT, matched_field TEXT, threat_type TEXT, is_ioc BOOLEAN, malware TEXT, record STRUCT<ioc_list TEXT, nano_marketplace BOOLEAN, nano_namespace TEXT, effective_valid_until BIGINT, first_seen TEXT, indicator_expires_at TEXT, ioc_type TEXT, ioc_value TEXT, malware TEXT, threat_type TEXT>, risk_score BIGINT, source_id TEXT>, name TEXT, provider TEXT, type TEXT, value TEXT, short_desc TEXT>[]",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "reg_value",
+    "type": "STRUCT<data TEXT, name TEXT, path TEXT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "reg_key",
+    "type": "STRUCT<path TEXT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "actual_permissions",
+    "type": "BIGINT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "process",
+    "type": "STRUCT<file STRUCT<name TEXT, path TEXT, type_id BIGINT, company_name TEXT, desc TEXT, hashes STRUCT<algorithm_id BIGINT, value TEXT>[], internal_name TEXT, product STRUCT<name TEXT>, version TEXT>, name TEXT, pid BIGINT, uid TEXT, user STRUCT<name TEXT>, cmd_line TEXT, integrity TEXT, integrity_id BIGINT, working_directory TEXT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "action",
+    "type": "TEXT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "action_id",
+    "type": "BIGINT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "disposition",
+    "type": "TEXT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "disposition_id",
+    "type": "BIGINT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "duration",
+    "type": "BIGINT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "http_request",
+    "type": "STRUCT<http_method TEXT, url STRUCT<categories TEXT[], hostname TEXT, path TEXT, scheme TEXT, url_string TEXT>, user_agent TEXT, referrer TEXT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "http_response",
+    "type": "STRUCT<code BIGINT, content_type TEXT, length BIGINT, status TEXT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "is_alert",
+    "type": "BOOLEAN",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "risk_level",
+    "type": "TEXT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "risk_level_id",
+    "type": "BIGINT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "risk_score",
+    "type": "BIGINT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "traffic",
+    "type": "STRUCT<bytes_in BIGINT, bytes_out BIGINT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "is_cleartext",
+    "type": "BOOLEAN",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "is_remote",
+    "type": "BOOLEAN",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "logon_type",
+    "type": "TEXT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "logon_type_id",
+    "type": "BIGINT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "session",
+    "type": "STRUCT<uid TEXT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "user",
+    "type": "STRUCT<domain TEXT, name TEXT, uid TEXT, email_addr TEXT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "auth_protocol",
+    "type": "TEXT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "auth_protocol_id",
+    "type": "BIGINT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "privileges",
+    "type": "TEXT[]",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "status_code",
+    "type": "TEXT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "status_detail",
+    "type": "TEXT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "resources",
+    "type": "STRUCT<name TEXT, type TEXT, uid TEXT, device STRUCT<hostname TEXT, name TEXT, risk_level TEXT, risk_level_id BIGINT, risk_score BIGINT, type_id BIGINT>, hostname TEXT, role TEXT, role_id BIGINT, user STRUCT<name TEXT, risk_level TEXT, risk_level_id BIGINT, risk_score BIGINT>, ip TEXT>[]",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "file",
+    "type": "STRUCT<hashes STRUCT<algorithm_id BIGINT, value TEXT>[], name TEXT, path TEXT, type_id BIGINT, created_time BIGINT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "answers",
+    "type": "STRUCT<rdata TEXT>[]",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "query",
+    "type": "STRUCT<hostname TEXT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "rcode",
+    "type": "TEXT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "rcode_id",
+    "type": "BIGINT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "prevalence_dest_domain",
+    "type": "INT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "prevalence_dest_ip",
+    "type": "INT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "prevalence_file_hash",
+    "type": "INT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "prevalence_min",
+    "type": "INT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "prevalence_process_hash",
+    "type": "INT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "count",
+    "type": "BIGINT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "finding_info",
+    "type": "STRUCT<analytic STRUCT<name TEXT, type TEXT, type_id BIGINT, uid TEXT, state TEXT, state_id BIGINT>, attacks STRUCT<tactic STRUCT<uid TEXT, name TEXT>, technique STRUCT<uid TEXT, name TEXT>, sub_technique STRUCT<name TEXT, uid TEXT>, version TEXT, tactics STRUCT<name TEXT, uid TEXT>[]>[], data_sources TEXT[], title TEXT, types TEXT[], uid TEXT, created_time BIGINT, src_url TEXT, uid_alt TEXT, first_seen_time BIGINT, last_seen_time BIGINT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "observables",
+    "type": "STRUCT<name TEXT, type TEXT, type_id BIGINT, value TEXT>[]",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "risk_details",
+    "type": "TEXT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "evidences",
+    "type": "STRUCT<actor STRUCT<user STRUCT<name TEXT, uid TEXT>>, data TEXT, device STRUCT<hostname TEXT, type_id BIGINT>, src_endpoint STRUCT<ip TEXT, hostname TEXT>>[]",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "end_time",
+    "type": "BIGINT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "start_time",
+    "type": "BIGINT",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "is_mfa",
+    "type": "BOOLEAN",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   },
+   {
+    "column_name": "service",
+    "type": "STRUCT<name TEXT>",
+    "required": "false",
+    "initial_default": "",
+    "write_default": "",
+    "doc": ""
+   }
+  ],
+  "metrics": {
+   "r2_requests_count": 0,
+   "files_scanned": 0,
+   "bytes_scanned": 0,
+   "cache_hits": 0
+  }
+ },
+ "success": true,
+ "errors": [],
+ "messages": []
+}

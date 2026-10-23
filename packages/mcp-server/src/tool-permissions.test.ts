@@ -1,3 +1,4 @@
+import { TOOLS as AGENT_LANE_TOOLS } from './tools/agent-lane.js';
 import { INGESTION_TOOLS } from './tools/ingestion.js';
 import { describe, expect, it } from 'vitest';
 
@@ -25,6 +26,7 @@ import {
 
 const ALL_TOOLS = [
   ...SEARCH_TOOLS,
+  ...AGENT_LANE_TOOLS,
   ...ALERTS_TOOLS,
   ...CASES_TOOLS,
   ...NOTEBOOKS_TOOLS,

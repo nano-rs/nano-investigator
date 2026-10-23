@@ -1,3 +1,4 @@
+import { AGENT_WINDOW_GUIDANCE } from './agent-window.js';
 /**
  * Threat hunting prompts — entity hunting and campaign hunting
  */
@@ -37,7 +38,7 @@ export const HUNT_CAMPAIGN_PROMPT = {
     },
     {
       name: 'time_range',
-      description: 'Time range to search (e.g., "-7d", "-30d"). Default: -7d',
+      description: 'Time range to search (e.g., "-7d", "-30d"). Default: -24h',
       required: false,
     },
   ],
@@ -58,14 +59,16 @@ export function getHuntEntityPrompt(args: Record<string, string | undefined>): {
         role: 'user',
         content: {
           type: 'text',
-          text: `You are hunting for activity related to entity: ${entity} (type: ${entityType})
+          text: `${AGENT_WINDOW_GUIDANCE}
+
+You are hunting for activity related to entity: ${entity} (type: ${entityType})
 Time range: ${timeRange}
 
-## Phase 1 — Context (run these in parallel where possible)
-- get_entity_context for ${entity}
-- ${entityType === 'ip' ? `lookup_ip("${entity}") for GeoIP/ASN` : `check threat-intel matches via search (the ioc_matched / ioc_threat_type / ioc_confidence columns are populated at ingest)`}
-- get_prevalence to understand how common this entity is
-- search for all activity involving this entity in the last ${timeRange}
+## Phase 1 — Lake candidates and stamps first
+- Discover authorized tables using lake_sql without sql; read the source schema.
+- Use scoped lake_sql over sealed hours for ${entity}; inspect prevalence at ingest time (stamp) and ingest threat-intel matches. Use search only for recent unsealed hours.
+- Only if current counts or unstamped artifacts (65535) matter, use guarded prevalence for the specific candidate (max 10 values), reason and bounded window.
+- Use guarded risk_scores, resolve_identity at the event timestamp, or lookup only to answer a specific remaining question, with a one-sentence reason; never fan out cell enrichment across all hits.
 
 ## Phase 2 — Assessment
 After gathering context, assess:
@@ -80,7 +83,7 @@ After gathering context, assess:
 ## Phase 3 — Deep Dive (only the interesting branches)
 Based on entity type:
 
-**Tool choice for Phase 3 queries:** Use search with canonical OCSF fields and bounded time windows. Read get_schema first. Hosted tenants do not expose raw SQL.
+**Tool choice for Phase 3 queries:** Use search with canonical OCSF fields and bounded time windows. Read get_schema first. Use lake_sql for sealed hours and bounded cell feature tools for enrichment.
 
 ${entityType === 'ip' ? `**IP Investigation:**
 - What internal hosts communicated with it? What ports/protocols?
@@ -124,7 +127,7 @@ export function getHuntCampaignPrompt(args: Record<string, string | undefined>):
   messages: Array<{ role: 'user'; content: { type: 'text'; text: string } }>;
 } {
   const description = args.description ?? 'unknown threat';
-  const timeRange = args.time_range ?? '-7d';
+  const timeRange = args.time_range ?? '-24h';
 
   return {
     description: `Hunt campaign: ${description}`,
@@ -133,14 +136,16 @@ export function getHuntCampaignPrompt(args: Record<string, string | undefined>):
         role: 'user',
         content: {
           type: 'text',
-          text: `You are conducting a proactive threat hunt for: ${description}
+          text: `${AGENT_WINDOW_GUIDANCE}
+
+You are conducting a proactive threat hunt for: ${description}
 Time range: ${timeRange}
 
 ## Step 1: PLAN the Hunt
 - What MITRE ATT&CK techniques are relevant? Use get_mitre_technique to understand them.
 - What log sources do we need? Use get_source_types to confirm availability.
 - What specific artifacts, behaviors, or indicators should we look for?
-- Design 3-5 targeted searches. Scope every one first: a source (\`metadata.log_source=…\` from get_source_types), a class (\`class_uid=…\`), an entity or a keyword. Never a bare \`*\` across the ${timeRange} window — it reads every source and slows every other query (over 4h nano runs it as a background job and the search tool refuses it). Use \`search\` (nPL) for terse \`| stats\` / \`| table\` patterns; reach for \`search_sql\` when the hunt needs joins (logs ↔ signals, ASOF identity), JSON \`ext.*\` access, or \`uniqMerge\` against prevalence summary tables.
+- Design 3-5 targeted searches. Scope every one first: a source (\`metadata.log_source=…\` from get_source_types), a class (\`class_uid=…\`), an entity or a keyword. Never a bare \`*\` across the ${timeRange} window — it reads every source and slows every other query (over 4h nano runs it as a background job and the search tool refuses it). Use \`search\` (nPL) for fresh events and terse \`| stats\` / \`| table\` patterns. For sealed hours use \`lake_sql\`, one source table with \`WHERE {window}\`. Use the bounded \`prevalence\`, \`risk_scores\`, \`resolve_identity\` and \`lookup\` tools for cell features; join their returned values client-side.
 
 ## Step 2: BUILD AND RUN QUERIES
 - Run each query with the ${timeRange} lookback
@@ -151,10 +156,10 @@ Time range: ${timeRange}
 
 ## Step 3: ENRICH FINDINGS
 - For any suspicious hits:
-  - Check prevalence (get_prevalence) — is this rare?
+  - Read prevalence at ingest time (stamp) via lake_sql first; guarded prevalence only for current counts or unstamped artifacts (65535), with reason and at most 10 known values.
   - Cross-reference threat intel: filter search results on ioc_matched / ioc_threat_type
   - Check for related alerts and cases
-  - Get entity context for involved entities
+  - Use guarded risk_scores, resolve_identity or lookup only for a specific remaining question, with reason and bounded windows.
 
 ## Step 4: REPORT
 Present a structured hunt report:

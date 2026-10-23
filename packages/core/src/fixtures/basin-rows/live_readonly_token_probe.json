@@ -1,0 +1,30 @@
+{
+ "result": {
+  "request_id": "dqe-prod-01M5JXM6RJ2M92ZDV2X4R88DQV",
+  "schema": [
+   {
+    "name": "c",
+    "descriptor": {
+     "type": {
+      "name": "int64"
+     },
+     "nullable": false
+    }
+   }
+  ],
+  "rows": [
+   {
+    "c": 3381845
+   }
+  ],
+  "metrics": {
+   "r2_requests_count": 55,
+   "files_scanned": 31,
+   "bytes_scanned": 8748781,
+   "cache_hits": 54
+  }
+ },
+ "success": true,
+ "errors": [],
+ "messages": []
+}

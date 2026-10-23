@@ -1,3 +1,5 @@
+import { AGENT_WINDOW_GUIDANCE } from '../prompts/agent-window.js';
+
 /**
  * Investigation Playbook Resources
  */
@@ -29,10 +31,9 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 - If yes → this is now an incident, not just an attempt
 
 ## Step 3: Entity Context
-- Who owns this IP? (get_entity_context)
-- Is it internal or external? (lookup_ip → GeoIP)
-- Is it a known scanner? (filter search on ioc_matched / ioc_threat_type)
-- Have we seen this IP before? (get_prevalence)
+- Use bounded lake_sql to inspect this IP’s observed identity, GeoIP, IOC and prevalence stamps first (prevalence at ingest time).
+- Only for a specific unresolved identity question, call resolve_identity with the event timestamp and a one-sentence reason; report observed_at.
+- Use guarded lookup only for a specific unstamped IOC or current lookup-table question, with reason.
 
 ## Step 4: Blast Radius (if successful auth)
 - What did the compromised account do after login?
@@ -78,7 +79,7 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 5: Assess Spread
 - How far did the attacker get?
-- Use get_entity_context for each compromised host
+- Use bounded lake_sql for the compromised hosts’ observed identity and ingest stamps; only use risk_scores for a specific remaining risk question, with reason
 - Check for data access, staging, or exfiltration from any of the targets
 
 ## Step 6: Recommend Action
@@ -139,7 +140,8 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 2: Check Prevalence
 - Is this binary/process common in the environment?
-- Use get_prevalence with the process hash
+- Inspect the process hash’s ingest prevalence stamps using bounded lake_sql first; label them prevalence at ingest time.
+- Only use guarded prevalence for current counts or an unstamped (65535) artifact already found, with reason and narrow values; report its effective whole-part window.
 - Prevalence 1/4000 = very suspicious. Prevalence 3500/4000 = probably legitimate.
 
 ## Step 3: Process Ancestry
@@ -150,7 +152,7 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 ## Step 4: Network Activity
 - What did the suspicious process connect to?
 - Query: \`device.hostname="{host}" process.file.name="{process}" | where dst_endpoint.ip != "" | stats count by dst_endpoint.ip, dst_endpoint.port\`
-- Check destinations with lookup_ip; flag threat-intel hits via the ioc_matched / ioc_threat_type columns
+- Inspect destination GeoIP and IOC stamps in bounded lake_sql first; guarded lookup requires a specific remaining question and reason.
 
 ## Step 5: File Activity
 - What files did the process create/modify?
@@ -264,10 +266,10 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 3. **Determine time window** — When did this start? Is it ongoing?
 
 ## Phase 2: Enrich
-4. **Entity context** — For each key entity, call get_entity_context
-5. **Prevalence check** — Is this artifact common or rare? (get_prevalence)
-6. **GeoIP/IOC** — Is this IP from an expected location? Is it a known IOC?
-7. **Risk score** — What's the accumulated risk for involved entities?
+4. **Entity context** — Inspect observed identities and ingest stamps in bounded lake_sql first; resolve_identity is only for a specific unresolved mapping at the event timestamp, with reason.
+5. **Prevalence check** — Use ingest prevalence stamps in lake_sql; guarded prevalence is only for current counts or an unstamped artifact already found, with reason.
+6. **GeoIP/IOC** — Read event GeoIP/IOC stamps first; guarded lookup only answers a specific remaining question, with reason.
+7. **Risk score** — Use guarded risk_scores only for a known suspicious entity with an unresolved risk question and reason; never sweep.
 
 ## Phase 3: Correlate
 8. **Related alerts** — Are there other alerts involving the same entities?
@@ -294,6 +296,8 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 `,
   },
 ];
+
+for (const playbook of PLAYBOOKS) playbook.content = `${AGENT_WINDOW_GUIDANCE}\n\n${playbook.content}`;
 
 export function getPlaybookResources() {
   return PLAYBOOKS.map((p) => ({

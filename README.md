@@ -58,7 +58,7 @@ Or add to your Claude Code settings (`~/.claude/settings.json`):
 > hunt for lateral movement in the last 7 days
 ```
 
-## Tools (115)
+## Tools
 
 | Category | Count | Tools |
 |----------|-------|-------|
@@ -67,9 +67,7 @@ Or add to your Claude Code settings (`~/.claude/settings.json`):
 | **Cases** | 11 | `list_cases` `get_case` `get_case_stats` `get_related_cases` `create_case` `update_case` `change_case_status` `assign_case` `add_alert_to_case` `add_case_wall_entry` `merge_cases` |
 | **Notebooks** | 9 | `list_notebooks` `get_notebook` `get_notebook_entries` `find_notebooks_by_reference` `create_notebook` `add_notebook_entry` `add_notebook_reference` `update_notebook` `share_notebook` |
 | **Detections** | 3 | `list_detections` `get_detection` `get_detection_matches` |
-| **Prevalence** | 3 | `get_prevalence` `get_rare_artifacts` `get_new_artifacts` |
-| **Risk** | 3 | `get_risky_entities` `get_risk_overview` `get_entity_risk_timeline` |
-| **Enrichment** | 2 | `get_entity_context` `lookup_ip` |
+| **Agent lane** | 5 | `lake_sql` `prevalence` `risk_scores` `resolve_identity` `lookup` |
 | **MITRE ATT&CK** | 2 | `get_mitre_technique` `get_mitre_coverage` |
 | **System** | 4 | `get_source_types` `get_org_context` `health_check` `get_audit_trail` |
 | **Ingestion diagnostics** | 18 | `list_pipelines` `get_pipeline` `explain_pipeline` `list_log_sources` `get_log_source` `list_parser_repositories` `get_parser_repository_sync_status` `browse_parser_repository` `get_repository_parser` `list_data_sources` `get_connector_status` `get_onboarding_status` `get_add_data_guidance` `get_log_source_health` `get_pipeline_releases` `get_pipeline_inputs` `get_add_data_status` `get_ingest_credential_activity` |
@@ -125,3 +123,12 @@ MIT
 For hosted tenants use `https://us.nano.rs/t/<tenant-slug>` as the API base URL. Keep the same tenant path in a separate search URL, if configured. The server validates that the API key belongs to that tenant. API keys use `X-API-Key`; the client sends a curl-compatible User-Agent. Redirects are refused so credentials cannot be forwarded to another host.
 
 Open-core deployments should set `NANOSIEM_DEPLOYMENT=open-core` so enterprise tools return an explicit unavailable message. Hosted case/notebook operations requiring browser sessions also return an actionable unavailable message. Ingestion tool migrations are listed in the capability matrix; other investigation tools retain their contracts. Durable searches poll and read verified pages within the configured timeout, with a maximum of 1000 output rows. Timeout errors include the job ID for inspection in nano; they never represent zero matches.
+
+The legacy MCP tools get_prevalence, get_entity_risk_timeline, lookup_ioc, lookup_ip, get_entity_context, get_rare_artifacts, get_new_artifacts, get_risky_entities, get_risk_overview and get_entity_risk_activity are retired. Use lake_sql stamps first, then guarded cell exceptions with narrow values, reason and bounded windows. Server budgets are 6 calls per authenticated API key per rolling hour, 30 per tenant per UTC day and 1 concurrent call per tool per tenant. Session IDs are audit labels only. lake_sql without sql discovers authorized catalog tables. See [stamped prevalence](docs/STAMPED-PREVALENCE.md).
+
+On hosted shared, API keys must use `POST /api/agent/features` for cell
+exceptions. Legacy heavy prevalence, risk/context, identity-resolution and
+lookup data routes refuse automation even if a reason is supplied; web UI
+sessions keep their existing behavior. The guarded bulk-prevalence and entity
+risk-timeline compatibility adapters remain available. Updating an older
+client must not introduce a fallback to an unguarded route.

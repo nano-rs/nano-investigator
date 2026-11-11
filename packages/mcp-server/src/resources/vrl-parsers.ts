@@ -37,7 +37,7 @@ A **log source** is a Vector VRL parser bound to a \`source_type\`. This guide l
 - The raw log arrives in **\`.message\`**. Read it once: \`raw_log = string!(.message)\`.
 - **\`.source_type\` is already set** by ingestion. NEVER assign it.
 - Initialize \`.udm = {}\`, \`.ext = {}\`, \`.metadata = {}\` at the top.
-- Map well-known fields into \`.udm.*\` (the Unified Data Model — see \`nanosiem://schema/udm\`). Put source-specific extras in \`.ext.*\`. Put debug info in \`.metadata.*\`.
+- Map well-known fields into \`.udm.*\` (the Unified Data Model — the field table below; \`get_schema\` lists the deployment inventory). Put source-specific extras in \`.ext.*\`. Put debug info in \`.metadata.*\`.
 
 ## Required output — every event, no exceptions
 

@@ -47,7 +47,7 @@ ${
 }
 Follow this workflow. Do NOT skip validation or testing.
 
-1. **READ THE GUIDE** — load the \`nanosiem://reference/vrl-parsers\` resource. It has the input/output contract, the rules nano's VRL validator enforces, the forbidden functions, and copy-paste skeletons. Also skim \`nanosiem://schema/udm\` for the right UDM field names.
+1. **READ THE GUIDE** — load the \`nanosiem://reference/vrl-parsers\` resource. It has the input/output contract, the rules nano's VRL validator enforces, the forbidden functions, and copy-paste skeletons. Its UDM field discipline section names the output fields; call \`get_schema\` for the deployment's full field inventory.
 
 2. **CHECK FOR DUPLICATES** — call \`list_log_sources\` and check whether one already claims "${sourceType}" (as its \`source_type\`, or — for a routed feed — in its \`match_values\`; \`get_log_source\` to inspect). If so, edit it (\`get_log_source\` → \`update_log_source\`) rather than create a duplicate.
 

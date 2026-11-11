@@ -239,7 +239,7 @@ The full tool catalog, grouped by category:
 The server also exposes **MCP resources** (context that gets loaded into the conversation) and **prompts** (structured investigation workflows):
 
 **Resources:**
-- `nanosiem://schema/udm` — UDM field catalog organized by investigation scenario
+- `nanosiem://schema/ocsf` — OCSF field reference for nPL (the legacy `nanosiem://schema/udm` URI still resolves, deprecated)
 - `nanosiem://reference/npl` — nPL query language reference
 - `nanosiem://reference/playbooks/{type}` — Investigation playbooks (brute_force, lateral_movement, data_exfil, malware, phishing, insider_threat, generic)
 

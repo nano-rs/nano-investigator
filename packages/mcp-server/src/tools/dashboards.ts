@@ -78,7 +78,7 @@ const VISIBILITIES = ['public', 'group', 'private'];
  * Strip the parts of a query where a `|` is DATA, not a pipe: quoted strings and
  * regex literals. The backend applies its command blocklist to the parsed AST, so
  * a raw text scan over the whole query rejects things it runs perfectly well —
- * `process_name=/(chrome|ai)/` and `message="failed|tree"` are both legitimate,
+ * `process.file.name=/(chrome|ai)/` and `message="failed|tree"` are both legitimate,
  * and both look like a forbidden command to a naive scan.
  */
 function stripLiterals(query: string): string {
@@ -231,7 +231,7 @@ const SCHEMA_GUIDE = {
       {
         id: 'total',
         title: 'Denied events',
-        query: 'source_type="firewall" action="deny" host=$host | stats count',
+        query: 'metadata.log_source="firewall" disposition_id=2 device.hostname=$host | stats count',
         queryMode: 'piped',
         visualizationType: 'single_value',
         visualizationConfig: { unit: 'events', showTrend: true },
@@ -242,7 +242,7 @@ const SCHEMA_GUIDE = {
         id: 'by-port',
         title: 'Denies by destination port',
         query:
-          'source_type="firewall" action="deny" host=$host | stats count by dest_port | sort -count | head 10',
+          'metadata.log_source="firewall" disposition_id=2 device.hostname=$host | stats count by dst_endpoint.port | sort -count | head 10',
         queryMode: 'piped',
         visualizationType: 'bar',
         visualizationConfig: { orientation: 'vertical' },
@@ -481,7 +481,7 @@ export function validateDashboard(
 
     // The command blocklist. These don't degrade — they 400 at render time. Checked
     // against the commands the query actually invokes, not a text scan: a `|` inside
-    // a quoted string or a regex is data (`process_name=/(chrome|ai)/` is legitimate).
+    // a quoted string or a regex is data (`process.file.name=/(chrome|ai)/` is legitimate).
     const invoked = pipedCommands(query);
     for (const command of FORBIDDEN_COMMANDS) {
       if (invoked.includes(command)) {

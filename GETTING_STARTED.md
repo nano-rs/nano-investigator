@@ -223,7 +223,7 @@ Read pipeline drafts, release rollouts, input bindings, Add data delivery, onboa
 The server also exposes **MCP resources** (context that gets loaded into the conversation) and **prompts** (structured investigation workflows):
 
 **Resources:**
-- `nanosiem://schema/udm` — OCSF 1.9 field catalog (legacy URI retained) organized by investigation scenario
+- `nanosiem://schema/ocsf` — OCSF 1.9 field catalog (the legacy `nanosiem://schema/udm` URI still resolves, deprecated) organized by investigation scenario
 - `nanosiem://reference/npl` — nPL query language reference
 - `nanosiem://reference/playbooks/{type}` — Investigation playbooks (brute_force, lateral_movement, data_exfil, malware, phishing, insider_threat, generic)
 

@@ -35,7 +35,7 @@ svchost.exe
 ### Field = Value
 \`\`\`
 src_endpoint.ip="10.0.0.1"
-status=500
+http_response.code=500
 actor.user.name=admin
 metadata.log_source=windows_security
 metadata.event_code=4625
@@ -65,7 +65,7 @@ file.path=*\\\\temp\\\\*
 
 ### where — Filter events
 \`\`\`
-| where status_code >= 400
+| where http_response.code >= 400
 | where src_endpoint.ip != "10.0.0.1"
 | where actor.user.name IN ("admin", "root", "system")
 | where actor.user.name NOT IN ("svc_account", "healthcheck")
@@ -118,10 +118,10 @@ Prefix with \`-\` for descending order.
 
 ### eval — Computed fields
 \`\`\`
-| eval total_bytes = bytes_in + traffic.bytes_out
-| eval ratio = traffic.bytes_out / bytes_in
+| eval total_bytes = traffic.bytes_in + traffic.bytes_out
+| eval ratio = traffic.bytes_out / traffic.bytes_in
 | eval is_internal = is_private_ip(src_endpoint.ip)
-| eval domain = extract_domain(url)
+| eval domain = extract_domain(http_request.url.url_string)
 | eval cmd_length = len(process.cmd_line)
 \`\`\`
 
@@ -162,7 +162,7 @@ Accumulates risk on the specified entity field. Multiple risk commands stack.
 ### Network
 - \`cidr_match(ip, "10.0.0.0/8")\` — Check if IP is in CIDR range
 - \`is_private_ip(ip)\` — Check if IP is RFC1918 private
-- \`extract_domain(url)\` — Extract base domain from URL/FQDN
+- \`extract_domain(http_request.url.url_string)\` — Extract base domain from URL/FQDN
 
 ### String
 - \`len(field)\` — String length

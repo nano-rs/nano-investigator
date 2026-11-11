@@ -78,7 +78,7 @@ const VISIBILITIES = ['public', 'group', 'private'];
  * Strip the parts of a query where a `|` is DATA, not a pipe: quoted strings and
  * regex literals. The backend applies its command blocklist to the parsed AST, so
  * a raw text scan over the whole query rejects things it runs perfectly well —
- * `process_name=/(chrome|ai)/` and `message="failed|tree"` are both legitimate,
+ * `process.file.name=/(chrome|ai)/` and `message="failed|tree"` are both legitimate,
  * and both look like a forbidden command to a naive scan.
  */
 function stripLiterals(query: string): string {
@@ -484,7 +484,7 @@ export function validateDashboard(
 
     // The command blocklist. These don't degrade — they 400 at render time. Checked
     // against the commands the query actually invokes, not a text scan: a `|` inside
-    // a quoted string or a regex is data (`process_name=/(chrome|ai)/` is legitimate).
+    // a quoted string or a regex is data (`process.file.name=/(chrome|ai)/` is legitimate).
     const invoked = pipedCommands(query);
     for (const command of FORBIDDEN_COMMANDS) {
       if (invoked.includes(command)) {

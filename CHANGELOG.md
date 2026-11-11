@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 — OCSF-only agent teaching (NAN-5271)
+
+Prompts, playbooks, the nPL reference and the shipped skills now teach OCSF field paths and enums only: email playbook uses `email.from` / `email.to` / `email.subject`; HTTP uploads use `http_request.http_method` and `http_request.url.url_string`; status filters use `status_id`; process launches use `class_uid=1007 activity_id=1`; threat-intel hits use the `enrichments.ioc_*_threat_type` paths. The field reference resource moves to `nanosiem://schema/ocsf`; the old `nanosiem://schema/udm` URI still resolves (unlisted, deprecated). The stale `.claude/skills` copies are synced from `skills/`. A guard test fails if a prompt, resource, tool description or skill teaches a UDM short name (`user=`, `src_ip`, `src_host`, `process_name`, `command_line`, `action=`, `event_type`, `*_unified`, …).
+
 ## SOAR tools (NAN-4375)
 
 Add 26 tools for tenant SOAR: settings, catalog packs (install/upgrade/remove), connections (create/update/test/remove), actions (list/run), flows (validate/create/update/remove/run), runs (list/detail/cancel) and approvals (read). Requests are contract-tested against the tenant OpenAPI spec (`fixtures/soar-openapi.json`, refreshed by `scripts/refresh-soar-openapi.mjs`). Writes require `user_confirmed=true`. Action and flow runs are external side effects with a confirmation-free `dry_run`. Credentials are write-only and redacted everywhere. The `soar_workflow` prompt and `skills/soar-automation` are included. Enabling SOAR and approving runs remain human-session-only in nano. Output redaction moved to the shared `tools/redaction.ts`.

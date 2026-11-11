@@ -95,8 +95,8 @@ ${entityType === 'ip' ? `**IP Investigation:**
 ${entityType === 'user' ? `**User Investigation:**
 - What hosts did they access? Any privilege escalation?
 - Off-hours activity?
-- Query: \`actor.user.name="${entity}" | stats count, values(dst_endpoint.hostname), values(status) by src_endpoint.ip\`
-- Query: \`actor.user.name="${entity}" | where activity_name CONTAINS "privilege" OR action CONTAINS "sudo"\`` : ''}
+- Query: \`actor.user.name="${entity}" | stats count, values(dst_endpoint.hostname), values(status_id) by src_endpoint.ip\`
+- Query: \`actor.user.name="${entity}" | where activity_name CONTAINS "privilege" OR process.cmd_line CONTAINS "sudo"\`` : ''}
 
 ${entityType === 'host' ? `**Host Investigation:**
 - What processes ran? Any rare binaries?
@@ -157,7 +157,7 @@ Time range: ${timeRange}
 ## Step 3: ENRICH FINDINGS
 - For any suspicious hits:
   - Read prevalence at ingest time (stamp) via lake_sql first; guarded prevalence only for current counts or unstamped artifacts (65535), with reason and at most 10 known values.
-  - Cross-reference threat intel: filter search results on ioc_matched / ioc_threat_type
+  - Cross-reference threat intel: filter search results on the OCSF enrichment paths (enrichments.ioc_src_ip_threat_type, enrichments.ioc_dest_ip_threat_type, enrichments.ioc_domain_threat_type, enrichments.ioc_hash_threat_type, enrichments.ioc_url_threat_type; non-empty = hit)
   - Check for related alerts and cases
   - Use guarded risk_scores, resolve_identity or lookup only for a specific remaining question, with reason and bounded windows.
 

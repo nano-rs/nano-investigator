@@ -92,7 +92,7 @@ import { TOOLS as AGENT_LANE_TOOLS, handleAgentLaneTool } from './tools/agent-la
 import type { AgentToolName } from '@nano-rs/investigator-core';
 
 // Resources
-import { UDM_SCHEMA_RESOURCE, UDM_SCHEMA_CONTENT, UDM_SCHEMA_URI } from './resources/udm-schema.js';
+import { OCSF_SCHEMA_RESOURCE, OCSF_SCHEMA_CONTENT, OCSF_SCHEMA_URI, LEGACY_SCHEMA_URI } from './resources/ocsf-schema.js';
 import { NPL_REFERENCE_RESOURCE, NPL_REFERENCE_CONTENT, NPL_REFERENCE_URI } from './resources/npl-reference.js';
 import { SQL_GUIDE_RESOURCE, SQL_GUIDE_CONTENT, SQL_GUIDE_URI } from './resources/sql-guide.js';
 import { VRL_PARSERS_RESOURCE, VRL_PARSERS_CONTENT, VRL_PARSERS_URI } from './resources/vrl-parsers.js';
@@ -226,7 +226,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({
   resources: [
     SQL_GUIDE_RESOURCE,
-    UDM_SCHEMA_RESOURCE,
+    OCSF_SCHEMA_RESOURCE,
     NPL_REFERENCE_RESOURCE,
     VRL_PARSERS_RESOURCE,
     ...getPlaybookResources(),
@@ -242,9 +242,9 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     };
   }
 
-  if (uri === UDM_SCHEMA_URI) {
+  if (uri === OCSF_SCHEMA_URI || uri === LEGACY_SCHEMA_URI) {
     return {
-      contents: [{ uri, mimeType: 'text/markdown', text: UDM_SCHEMA_CONTENT }],
+      contents: [{ uri, mimeType: 'text/markdown', text: OCSF_SCHEMA_CONTENT }],
     };
   }
 

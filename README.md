@@ -82,7 +82,7 @@ SOAR tools (enterprise) map 1:1 to the tenant `/api/soar/*` API, using the OpenA
 ## Resources & Prompts
 
 **Resources** (context loaded into conversation):
-- `nanosiem://schema/udm` -- OCSF 1.9 field catalog (legacy URI retained)
+- `nanosiem://schema/ocsf` -- OCSF 1.9 field catalog (the legacy `nanosiem://schema/udm` URI still resolves, deprecated)
 - `nanosiem://reference/npl` -- nPL query language reference
 - `nanosiem://reference/vrl-parsers` -- VRL parser authoring guide (validator rules, OCSF mapping, skeletons)
 - `nanosiem://reference/playbooks/{type}` -- Investigation playbooks

@@ -26,15 +26,15 @@ Query the entity's activity in a window **before** the incident's first activity
 
 ```
 # Does this specific behavior predate the incident? (the decisive query)
-source_type=windows_sysmon user="<user>" <the-behavior-filter>
-| stats count by command_line | sort -count
+metadata.log_source=windows_sysmon actor.user.name="<user>" <the-behavior-filter>
+| stats count by process.cmd_line | sort -count
 #   run once for the baseline window (e.g. -21d .. incident_start)
 #   run again for the incident window — compare presence, volume, breadth
 
 # Volume/breadth baseline for the entity
-source_type=windows_sysmon (user="<user>" OR src_host="<host>")
+metadata.log_source=windows_sysmon (actor.user.name="<user>" OR device.hostname="<host>")
 | timechart span=1h count by action       # establish the entity's normal rhythm
-source_type=windows_sysmon user="<user>" <behavior> | stats dc(src_host) as hosts, dc(dest_ip) as dests
+metadata.log_source=windows_sysmon actor.user.name="<user>" <behavior> | stats dc(device.hostname) as hosts, dc(dst_endpoint.ip) as dests
 ```
 
 Also use the platform's built-in baseline tooling — don't hand-roll everything:

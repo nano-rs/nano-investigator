@@ -78,7 +78,7 @@ Parser tools let you build a log-source parser (Vector VRL) end to end from the 
 ## Resources & Prompts
 
 **Resources** (context loaded into conversation):
-- `nanosiem://schema/udm` -- UDM field catalog
+- `nanosiem://schema/ocsf` -- OCSF field reference for nPL (the legacy `nanosiem://schema/udm` URI still resolves, deprecated)
 - `nanosiem://reference/npl` -- nPL query language reference
 - `nanosiem://reference/vrl-parsers` -- VRL parser authoring guide (validator rules, UDM mapping, skeletons)
 - `nanosiem://reference/playbooks/{type}` -- Investigation playbooks

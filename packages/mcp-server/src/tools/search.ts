@@ -147,19 +147,19 @@ const TOOL_DEFINITIONS = [
     description:
       'Advanced search tool. Run a ClickHouse SQL SELECT against the SIEM log store. Prefer `search` (nPL) for normal investigations; use raw SQL only for queries nPL cannot express, such as cross-table joins, prevalence-state aggregates, or direct `ext` JSON access.\n' +
       '\n' +
-      'On first use in a session, call `get_schema` to load the UDM column inventory. For canonical query recipes (prevalence lookups, top-N, time bucketing, ASOF identity joins, etc.) read the `nano://sql-guide` resource.\n' +
+      'On first use in a session, call `get_schema` to load the column inventory. For canonical query recipes (prevalence lookups, top-N, time bucketing, ASOF identity joins, etc.) read the `nano://sql-guide` resource.\n' +
       '\n' +
       'PERFORMANCE RULES — follow every time:\n' +
       '  1. Use one `WHERE` clause for the timestamp filter and every other predicate. Do not write an explicit `PREWHERE`; ClickHouse moves eligible filters automatically. The timestamp filter is non-negotiable — without it, ClickHouse cannot prune daily partitions and scans everything:\n' +
       "       WHERE timestamp >= '...' AND timestamp <= '...'\n" +
       "         AND lower(source_type) = lower(\'windows\')\n" +
       "         AND lower(message) iLike \'%logon failure%\'\n" +
-      '  2. Case-insensitive free-text search: use `lower(field) iLike \'%needle%\'`. Text indexes (splitByNonAlpha tokenizer, granularity 1) on `lower(message)`, `lower(command_line)`, `lower(user)`, `lower(process_name)`, `lower(file_path)`, etc. keep this fast. **Do NOT use `hasToken(...)` for variable-length needles — it silently misses substrings (NAN-1026).**\n' +
+      '  2. Case-insensitive free-text search: use `lower(field) iLike \'%needle%\'`. Text indexes (splitByNonAlpha tokenizer, granularity 1) on `lower(message)` and the command-line, user, process and path columns (on `ocsf_logs`, e.g. process.cmd_line and file.path, backtick-quoted) keep this fast. **Do NOT use `hasToken(...)` for variable-length needles — it silently misses substrings (NAN-1026).**\n' +
       '  3. `lower()` consistency — case-sensitive fields like `source_type` need `lower()` on both sides of the comparison.\n' +
       '  4. **`ext` is a ClickHouse JSON column** — access with `ext.field_name` or `ext[\'field_name\']`, NOT JSONExtract. Use JSONExtract only on the legacy `metadata` String column.\n' +
-      '  5. UDM columns are real columns (src_ip, process_name, user, file_hash, etc.) — access directly, never through `ext`.\n' +
+      '  5. Event fields are real columns — access directly, never through `ext`. On `ocsf_logs` the columns are the dotted OCSF paths and must be backtick-quoted in SQL (src_endpoint.ip, process.cmd_line, actor.user.name).\n' +
       `  6. Always include an explicit LIMIT. Default ${DEFAULT_MCP_RESULT_LIMIT}; the interactive MCP surface refuses more than ${MAX_MCP_RESULT_LIMIT} returned rows.\n` +
-      '  7. Tables (allowlisted): `logs` (raw events), `signals` (detection matches), `*_prevalence_summary` / `*_prevalence_agg` (prevalence — AggregatingMergeTree, query with uniqMerge for host_count), `identity_observations` (use ASOF JOIN for IP→hostname enrichment).\n' +
+      '  7. Tables (allowlisted): `ocsf_logs` (OCSF events — the default schema profile), `logs` (events on legacy UDM-profile installs; check `get_schema`), `signals` (detection matches), `*_prevalence_summary` / `*_prevalence_agg` (prevalence — AggregatingMergeTree, query with uniqMerge for host_count), `identity_observations` (use ASOF JOIN for IP→hostname enrichment).\n' +
       '\n' +
       'TIME RANGE:\n' +
       '  - Both `start_time` and `end_time` are optional; omit both for the last 24h default.\n' +
@@ -167,8 +167,8 @@ const TOOL_DEFINITIONS = [
       '  - You must STILL include `timestamp >= ? AND timestamp <= ?` (or `BETWEEN`) in the single `WHERE` clause — the time params bind the request envelope; the SQL controls partition pruning.\n' +
       '\n' +
       'EXAMPLE:\n' +
-      '  SELECT timestamp, src_ip, user, message\n' +
-      '  FROM logs\n' +
+      '  SELECT timestamp, `src_endpoint.ip`, `actor.user.name`, message\n' +
+      '  FROM ocsf_logs\n' +
       "  WHERE timestamp BETWEEN \'2026-05-25T00:00:00Z\' AND \'2026-05-26T00:00:00Z\'\n" +
       "    AND lower(source_type) = lower(\'windows\')\n" +
       "    AND lower(message) iLike \'%logon failure%\'\n" +
@@ -242,9 +242,9 @@ const TOOL_DEFINITIONS = [
       'REX QUOTING: If a regex contains JSON-style double quotes, wrap the whole pattern in SINGLE quotes: `| rex field=message \'"KEY":"(?<value>[^\"]+)"\'`. Backslash does not escape a double-quoted nPL delimiter; this spelling also works on older nano backends.\n' +
       '\n' +
       'Examples:\n' +
-      '  - "src_ip=10.0.0.0/8 | stats count by dest_ip, dest_port | sort -count"\n' +
-      '  - "process_name=powershell.exe | table timestamp, user, command_line"\n' +
-      '  - "source_type=firewall | timechart span=1h count by action"\n' +
+      '  - "src_endpoint.ip=10.0.0.0/8 | stats count by dst_endpoint.ip, dst_endpoint.port | sort -count"\n' +
+      '  - "process.file.name=powershell.exe | table time, actor.user.name, process.cmd_line"\n' +
+      '  - "metadata.log_source=firewall | timechart span=1h count by disposition_id"\n' +
       'Pipe commands: stats, where, sort, head, table, timechart, eval, dedup, rename, rex.\n' +
       'Time arguments accept relative ("-15m", "-1h", "-7d"), "now", or ISO 8601.',
     inputSchema: {
@@ -318,7 +318,7 @@ const TOOL_DEFINITIONS = [
       properties: {
         field: {
           type: 'string',
-          description: 'The field name to get top values for (e.g. "src_ip", "process_name", "user", "dest_port").',
+          description: 'The field name to get top values for (e.g. "src_endpoint.ip", "process.file.name", "actor.user.name", "dst_endpoint.port").',
         },
         query: {
           type: 'string',

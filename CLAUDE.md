@@ -16,31 +16,31 @@
 - **Discover source types first** — Call `get_source_types` before writing queries that filter on source_type. Never guess or hardcode source type names (e.g. `dns`, `proxy`). The available source types vary per deployment.
 - **Use source_type when known** — Optimizes queries through partition and index pruning.
   ```
-  source_type=windows_security | where event_id=4625   ← fast
-  event_id=4625                                         ← slow (scans all source types)
+  metadata.log_source=windows_security | where metadata.event_code=4625   ← fast
+  metadata.event_code=4625                                                ← slow (scans all source types)
   ```
-- **Only use real UDM field names** — Never guess or invent field names. All source types share the same UDM schema. If you're unsure whether a field exists, run `source_type=<type> | head 1` to see the actual fields. Common mistakes to avoid:
-  - `process_command_line` → wrong. The real field is `process`
-  - `parent_process_command_line` → wrong. The real field is `parent_process`
-  - `file_hash_sha256` → wrong. The real field is `file_hash`
-  - `status_code` → wrong for proxy. The real field is `http_status_code`
-  - `parent_user` is a real field (not `parent_process_user`)
+- **Use canonical OCSF field paths** — call `get_schema` before constructing queries, and read the `nanosiem://schema/ocsf` resource. Never guess or invent field names; use `get_field_values` to confirm observed values, and don't assume every source populates every field.
 
-  **Key UDM fields for investigations:**
-  - **Network**: src_ip, dest_ip, src_port, dest_port, src_host, dest_host, src_mac, dest_mac, protocol, bytes_in, bytes_out, packets, url, url_domain, uri_path
-  - **Endpoint/Process**: process_name, process, process_path, process_id, parent_process_name, parent_process, parent_process_path, parent_process_id, file_hash, file_name, file_path, file_size, file_action
-  - **Auth**: user, user_domain, user_id, src_user, dest_user, auth_type, auth_result, session_id, mfa_used
-  - **Web/Proxy**: http_method, http_status_code, http_user_agent, http_referrer, http_content_type, uri_path, url, url_domain, duration
-  - **DNS**: answer, answer_count, query_type, record_type, reply_code, transaction_id, ttl
-  - **Identity**: user, src_host, src_ip, src_mac, dest_host, dest_ip
-  - **Alert/Detection**: severity, signature, signature_id, rule_id, rule_name, mitre_technique_id
-  - **Meta**: timestamp, source_type, message, action, category, vendor_product, metadata, ext
-  - **Enrichment** (auto-added): enriched_src_country, enriched_dest_country, enriched_src_asn, enriched_dest_asn, ioc_matched, ioc_confidence, prevalence_min, prevalence_dest_domain, prevalence_dest_ip, prevalence_file_hash, prevalence_process_hash
+  **Key OCSF fields for investigations:**
+  - **Classification**: `time`, `class_uid`, `activity_id`, `activity_name`, `status_id`, `disposition_id`, `severity_id`, `metadata.log_source`, `metadata.event_code`, `message`
+  - **Network**: `src_endpoint.ip`, `src_endpoint.port`, `src_endpoint.hostname`, `dst_endpoint.ip`, `dst_endpoint.port`, `dst_endpoint.hostname`, `connection_info.protocol_name`, `traffic.bytes_in`, `traffic.bytes_out`
+  - **Endpoint/Process**: `device.hostname`, `process.file.name`, `process.file.path`, `process.cmd_line`, `process.pid`, `process.parent_process.file.path`, `process.parent_process.cmd_line`, `actor.process.file.name`, `file.name`, `file.path`, `file.size`, `file.hashes.value`
+  - **Users**: `actor.user.name` (acting user on process, file, network and API activity); `user.name` (the account a logon is for — Authentication 3002 and Authorize Session 3003 put it here and leave `actor.user.name` empty). Cross-class user lookups OR both: `(actor.user.name="x" OR user.name="x")`
+  - **Web/Proxy**: `http_request.http_method`, `http_request.url.url_string`, `http_request.url.hostname`, `http_request.user_agent`, `http_response.code`
+  - **DNS**: `query.hostname`, `rcode`
+  - **Email**: `email.from`, `email.to`, `email.subject`
+  - **Threat intel** (auto-added at ingest; non-empty = hit): `enrichments.ioc_src_ip_threat_type`, `enrichments.ioc_dest_ip_threat_type`, `enrichments.ioc_domain_threat_type`, `enrichments.ioc_hash_threat_type`, `enrichments.ioc_url_threat_type`, `enrichments.ioc_source`
+
+  **Event semantics are OCSF enums, not strings** (they match nanosiem `ocsf_predicates.rs`):
+  - Logon: `class_uid=3002 activity_id=1`; success/failure: `status_id=1` / `status_id=2`
+  - Logon type: interactive `logon_type_id IN (2, 10, 11, 12)`, network `logon_type_id IN (3, 8)`
+  - Block/allow is `disposition_id`, never an activity name: blocked `disposition_id IN (2, 3, 4, 6, 25, 26)`, allowed `disposition_id IN (1, 8)`
+  - Process launch: `class_uid=1007 activity_id=1`; file: `class_uid=1001`; DNS: `class_uid=4003`; HTTP: `class_uid=4002`
 
 - **Free text search** — Just search the term: `connection refused`, `svchost.exe`
-- **Field searches** — `src_ip="10.0.0.1"`, `user=admin`, `status=500`
-- **Stats for aggregation** — `| stats count by src_ip`, `| stats sum(bytes_out) by dest_ip`
-- **Chain commands** — `source_type=auth | where action="failed" | stats count by src_ip | where count > 10`
+- **Field searches** — `src_endpoint.ip="10.0.0.1"`, `actor.user.name=admin`, `http_response.code=500`
+- **Stats for aggregation** — `| stats count by src_endpoint.ip`, `| stats sum(traffic.bytes_out) by dst_endpoint.ip`
+- **Chain commands** — `class_uid=3002 status_id=2 | stats count by src_endpoint.ip | where count > 10`
 
 ## Investigation Methodology
 
@@ -81,20 +81,19 @@ This is different from starting a fresh investigation from an alert — `review_
 
 ## Identity Resolution (Host ↔ IP ↔ User)
 
-nano maintains an `identity_observations` table that automatically maps IPs to hostnames, users, and MACs from any log source that has both `src_ip` and `src_host`. This is critical for cross-source correlation — different source types use different identifiers (e.g., EDR logs use hostname, proxy logs use IP).
+nano maintains an `identity_observations` table that automatically maps IPs to hostnames, users, and MACs from any log source that carries both an IP and a hostname. This is critical for cross-source correlation — different sources use different identifiers (e.g., EDR logs carry `device.hostname`, proxy logs carry `src_endpoint.ip`).
 
 ### `resolve_identity` command
 
-Enriches search results with identity data via ASOF JOIN. Use this when a source type is missing the identifier you need.
+Enriches search results with identity data via ASOF JOIN. Use this when a source is missing the identifier you need.
 
 ```
-source_type=squid_proxy | resolve_identity | where src_host="srv-web06"
+metadata.log_source=squid_proxy | resolve_identity | table time, src_endpoint.ip, identity_confidence
 ```
 
-- **Default field**: `src_ip` — resolves IP to hostname/user/MAC
-- **Custom field**: `| resolve_identity field=dest_ip` — resolve a different IP field
+- **Default**: resolves the event's source IP to the hostname/user/MAC observed closest in time
 - **Max age**: `| resolve_identity max_age=4h` — only use observations from the last 4h (default 24h)
-- **Output fields added**: `src_host`, `user`, `src_mac`, `identity_confidence` (high/medium/low/stale/none), `identity_source`, `identity_fqdn`
+- **Output**: adds the resolved hostname, user and MAC plus `identity_confidence` (high/medium/low/stale/none), `identity_source`, `identity_fqdn`
 
 **Confidence levels** (based on observation age relative to the event):
 - `high`: identity observed within 1 hour of event
@@ -108,16 +107,15 @@ source_type=squid_proxy | resolve_identity | where src_host="srv-web06"
 Creates a comprehensive asset-centric view that automatically resolves all identities (IPs, hostnames, users) associated with an asset, then queries all activity across those identities.
 
 ```
-src_host="srv-web06" | asset
-src_ip="10.2.1.76" | asset field=src_ip
-user="svc_web" | asset sections=auth,process max_age=7d
+device.hostname="srv-web06" | asset
+actor.user.name="svc_web" | asset sections=auth,process max_age=7d
 ```
 
 Sections: `network`, `process`, `auth`, `file`, `dns`, `alerts` (default: all).
 
 ### When to use identity resolution
 
-- **Cross-source correlation**: Proxy logs have `src_ip` but not `src_host`? Use `| resolve_identity` to map IP → hostname before filtering by host.
+- **Cross-source correlation**: Proxy logs have `src_endpoint.ip` but no hostname? Use `| resolve_identity` to map IP → hostname before filtering by host.
 - **Don't manually guess mappings**: Never hardcode or assume hostname-to-IP relationships. Let the identity system resolve them.
 - **Pivoting from host to IP (or vice versa)**: When you know a hostname from EDR and need to search proxy/firewall logs by IP, use `resolve_identity` or `asset` instead of manually discovering the IP and searching separately.
 - **NAT awareness**: IPs with 3+ hosts in the same hour are flagged as NAT candidates — identity resolution on those IPs may be unreliable.
@@ -180,7 +178,7 @@ Each `add_notebook_entry` type requires a specific content structure. **Do not**
 ### `search_executed`
 ```json
 {
-  "query": "source_type=squid_proxy | where dest_host=\"paste.ee\"",
+  "query": "metadata.log_source=squid_proxy | where dst_endpoint.hostname=\"paste.ee\"",
   "query_mode": "piped",
   "result_count": 14,
   "time_range_start": "2026-02-22T00:00:00Z",

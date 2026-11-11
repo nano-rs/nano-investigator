@@ -63,7 +63,7 @@ Time range: ${timeRange}
 
 ## Phase 1 — Context (run these in parallel where possible)
 - get_entity_context for ${entity}
-- ${entityType === 'ip' ? `lookup_ip("${entity}") for GeoIP/ASN` : `check threat-intel matches via search (the ioc_matched / ioc_threat_type / ioc_confidence columns are populated at ingest)`}
+- ${entityType === 'ip' ? `lookup_ip("${entity}") for GeoIP/ASN` : `check threat-intel matches via search (the OCSF enrichment paths enrichments.ioc_*_threat_type / enrichments.ioc_*_confidence are populated at ingest; non-empty = hit)`}
 - get_prevalence to understand how common this entity is
 - search for all activity involving this entity in the last ${timeRange}
 
@@ -86,31 +86,31 @@ ${entityType === 'ip' ? `**IP Investigation:**
 - What internal hosts communicated with it? What ports/protocols?
 - Is it associated with any known threats? (IOC check)
 - Temporal pattern: regular intervals (beaconing)? Burst traffic (exfil)?
-- Query: \`dest_ip="${entity}" | stats count, sum(bytes_out) as bytes, dc(src_ip) as sources by dest_port\`
-- Query: \`src_ip="${entity}" | stats count, dc(dest_ip) as targets by dest_port\`` : ''}
+- Query: \`dst_endpoint.ip="${entity}" | stats count, sum(traffic.bytes_out) as bytes, dc(src_endpoint.ip) as sources by dst_endpoint.port\`
+- Query: \`src_endpoint.ip="${entity}" | stats count, dc(dst_endpoint.ip) as targets by dst_endpoint.port\`` : ''}
 
 ${entityType === 'user' ? `**User Investigation:**
 - What hosts did they access? Any privilege escalation?
 - Off-hours activity?
-- Query: \`user="${entity}" | stats count, values(dest_host), values(auth_result) by src_ip\`
-- Query: \`user="${entity}" | where action CONTAINS "privilege" OR action CONTAINS "sudo"\`` : ''}
+- Query: \`class_uid=3002 user.name="${entity}" | stats count, values(dst_endpoint.hostname), values(status_id) by src_endpoint.ip\`
+- Query: \`(actor.user.name="${entity}" OR user.name="${entity}") | where activity_name CONTAINS "privilege" OR process.cmd_line CONTAINS "sudo"\`` : ''}
 
 ${entityType === 'host' ? `**Host Investigation:**
 - What processes ran? Any rare binaries?
 - What network connections? Any unusual destinations?
-- Query: \`src_host="${entity}" | stats count by process_name | sort -count\`
-- Query: \`src_host="${entity}" | where dest_port NOT IN (80, 443, 53) | stats count by dest_ip, dest_port\`` : ''}
+- Query: \`device.hostname="${entity}" | stats count by process.file.name | sort -count\`
+- Query: \`device.hostname="${entity}" | where dst_endpoint.port NOT IN (80, 443, 53) | stats count by dst_endpoint.ip, dst_endpoint.port\`` : ''}
 
 ${entityType === 'hash' ? `**Hash Investigation:**
 - Prevalence across the environment — how many hosts have this hash?
 - When was it first seen? Is it new?
 - What process name is associated with it?
-- Query: \`process_hash="${entity}" | stats count, dc(src_host) as hosts by process_name\`` : ''}
+- Query: \`file.hashes.value="${entity}" | stats count, dc(device.hostname) as hosts by process.file.name\`` : ''}
 
 ${entityType === 'domain' ? `**Domain Investigation:**
 - Prevalence — how many hosts resolved this domain?
 - DNS query patterns — volume, timing, subdomain enumeration
-- Query: \`dns_query CONTAINS "${entity}" | stats count, dc(src_ip) as resolvers, dc(dns_query) as subdomains by dns_response_code\`` : ''}
+- Query: \`query.hostname CONTAINS "${entity}" | stats count, dc(src_endpoint.ip) as resolvers, dc(query.hostname) as subdomains by rcode\`` : ''}
 
 Ask the analyst which threads to pull further after presenting Phase 3 findings.`,
         },
@@ -152,7 +152,7 @@ Time range: ${timeRange}
 ## Step 3: ENRICH FINDINGS
 - For any suspicious hits:
   - Check prevalence (get_prevalence) — is this rare?
-  - Cross-reference threat intel: filter search results on ioc_matched / ioc_threat_type
+  - Cross-reference threat intel: filter search results on the OCSF enrichment paths (enrichments.ioc_src_ip_threat_type, enrichments.ioc_dest_ip_threat_type, enrichments.ioc_domain_threat_type, enrichments.ioc_hash_threat_type, enrichments.ioc_url_threat_type; non-empty = hit)
   - Check for related alerts and cases
   - Get entity context for involved entities
 

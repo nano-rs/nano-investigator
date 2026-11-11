@@ -18,7 +18,7 @@ export const SQL_GUIDE_CONTENT = `# nano SQL Guide
 
 ClickHouse SQL patterns for hunting through the nano SIEM log store. Examples are lifted from production code in nanosiem-core.
 
-> Pair this with \`get_schema\` (UDM column inventory) and the \`search_sql\` tool.
+> Pair this with \`get_schema\` (column inventory) and the \`search_sql\` tool. Prefer nPL \`search\` with OCSF field paths (see \`nanosiem://schema/ocsf\`); use SQL only for what nPL cannot express. The recipes below are written against the UDM \`logs\` table; on \`ocsf_logs\` substitute the backtick-quoted OCSF column for each UDM column.
 
 ---
 
@@ -26,7 +26,8 @@ ClickHouse SQL patterns for hunting through the nano SIEM log store. Examples ar
 
 | Table | Purpose | Notes |
 |-------|---------|-------|
-| \`logs\` | Raw normalized events (UDM) | The primary hunt table. ~75 explicit UDM columns + \`ext\` JSON column. |
+| \`ocsf_logs\` | OCSF events (the default schema profile) | Columns are the dotted OCSF paths (\`class_uid\`, \`src_endpoint.ip\`, \`process.cmd_line\`, …) and must be backtick-quoted in SQL. Check \`get_schema\` for which event table this deployment populates. |
+| \`logs\` | Normalized events on legacy UDM-profile installs | The examples below use it. ~75 explicit UDM columns + \`ext\` JSON column. |
 | \`signals\` | Detection rule matches | Audit trail of when which rule fired on which event. |
 | \`hash_prevalence_summary\` | Rolled-up hash prevalence | AggregatingMergeTree. Query with \`uniqMerge(host_count)\`. |
 | \`domain_prevalence_summary\` | Rolled-up domain prevalence | Same pattern as hash. |

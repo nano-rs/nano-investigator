@@ -33,7 +33,7 @@ metadata.log_source=windows_sysmon actor.user.name="<user>" <the-behavior-filter
 
 # Volume/breadth baseline for the entity
 metadata.log_source=windows_sysmon (actor.user.name="<user>" OR device.hostname="<host>")
-| timechart span=1h count by action       # establish the entity's normal rhythm
+| timechart span=1h count by activity_name # establish the entity's normal rhythm
 metadata.log_source=windows_sysmon actor.user.name="<user>" <behavior> | stats dc(device.hostname) as hosts, dc(dst_endpoint.ip) as dests
 ```
 

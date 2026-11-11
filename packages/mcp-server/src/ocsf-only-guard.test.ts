@@ -24,6 +24,23 @@ const BANNED_FIELD =
   /(?<![\w.$-])(src_ip|dest_ip|src_host|dest_host|process_name|command_line|parent_command_line|event_type|auth_result|ioc_matched|ioc_threat_type|email_from|email_to|email_subject|file_hash|status_code|bytes_in|bytes_out|[a-z_]+_unified)(?![\w.])/;
 /** Bare `user=` / `action=` filters (OCSF: actor.user.name, disposition_id / activity_id). */
 const BANNED_FILTER = /(?<![\w.$-])(user|action)\s*!?=(?!=)/;
+/** `user` / `action` as a group-by or aggregate field. */
+const BANNED_GROUP = /(\b(?:count|sum\([\w.]+\)|as \w+)\s+by\s+|\b(?:values|dc)\()(user|action)(?![\w.])/;
+/** Block/allow is disposition_id, never an activity caption (no OCSF activity is named "deny"). */
+const BANNED_SEMANTIC = /activity_name\s*=\s*"?(deny|denied|block(ed)?|allow(ed)?|drop(ped)?|reject(ed)?)\b/i;
+/**
+ * Authentication (3002) and Authorize Session (3003) carry the account in
+ * user.name; actor.user.name is empty on them, so a class-scoped auth query on
+ * actor.user.name silently matches nothing.
+ */
+function authActorMisuse(line: string): string | null {
+  return /class_uid\s*=\s*300[23]\b/.test(line) && /actor\.user\.name/.test(line) ? 'class_uid=3002/3003 with actor.user.name' : null;
+}
+
+function violation(line: string): string | null {
+  const m = line.match(BANNED_FIELD) ?? line.match(BANNED_FILTER) ?? line.match(BANNED_GROUP) ?? line.match(BANNED_SEMANTIC);
+  return m ? m[0] : authActorMisuse(line);
+}
 
 /**
  * Files that legitimately name legacy fields: query-scope.ts RECOGNIZES them in
@@ -73,19 +90,26 @@ describe('OCSF-only guard (NAN-5271)', () => {
       readFileSync(file, 'utf8')
         .split('\n')
         .forEach((line, i) => {
-          const m = line.match(BANNED_FIELD) ?? line.match(BANNED_FILTER);
-          if (m) hits.push(`${rel}:${i + 1}: ${m[0]}`);
+          const v = violation(line);
+          if (v) hits.push(`${rel}:${i + 1}: ${v}`);
         });
     }
     expect(hits).toEqual([]);
   });
 
   it('the patterns catch the legacy forms', () => {
-    for (const legacy of ['user="x"', 'src_ip="1.2.3.4"', 'by src_host', 'action=blocked', 'values(email_to)', 'user_unified']) {
-      expect(BANNED_FIELD.test(legacy) || BANNED_FILTER.test(legacy), legacy).toBe(true);
+    for (const legacy of [
+      'user="x"', 'src_ip="1.2.3.4"', 'by src_host', 'action=blocked', 'values(email_to)', 'user_unified',
+      'timechart span=1h count by action', 'dc(user) as users', 'activity_name="deny"',
+      'class_uid=3002 actor.user.name="x" status_id=1',
+    ]) {
+      expect(violation(legacy), legacy).not.toBeNull();
     }
-    for (const ocsf of ['actor.user.name="x"', 'src_endpoint.ip="1.2.3.4"', 'traffic.bytes_in', 'email.to', 'disposition_id=2', 'user_confirmed=true']) {
-      expect(BANNED_FIELD.test(ocsf) || BANNED_FILTER.test(ocsf), ocsf).toBe(false);
+    for (const ocsf of [
+      'actor.user.name="x"', 'src_endpoint.ip="1.2.3.4"', 'traffic.bytes_in', 'email.to', 'disposition_id=2', 'user_confirmed=true',
+      'count by activity_name', 'class_uid=3002 user.name="x"', 'Filter by user ID', 'by user.name',
+    ]) {
+      expect(violation(ocsf), ocsf).toBeNull();
     }
   });
 });

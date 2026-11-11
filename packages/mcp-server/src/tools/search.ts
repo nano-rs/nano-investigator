@@ -213,7 +213,7 @@ const TOOL_DEFINITIONS = [
       'Examples:\n' +
       '  - "src_endpoint.ip=10.0.0.0/8 | stats count by dst_endpoint.ip, dst_endpoint.port | sort -count"\n' +
       '  - "process.file.name=powershell.exe | table time, actor.user.name, process.cmd_line"\n' +
-      '  - "metadata.log_source=firewall | timechart span=1h count by action"\n' +
+      '  - "metadata.log_source=firewall | timechart span=1h count by disposition_id"\n' +
       'Pipe commands: stats, where, sort, head, table, timechart, eval, dedup, rename, rex.\n' +
       'Time arguments accept relative ("-15m", "-1h", "-7d"), "now", or ISO 8601.',
     inputSchema: {

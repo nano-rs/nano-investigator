@@ -98,7 +98,7 @@ file.path=*\\\\temp\\\\*
 
 ### table — Select specific columns
 \`\`\`
-| table time, src_endpoint.ip, dst_endpoint.ip, action, actor.user.name
+| table time, src_endpoint.ip, dst_endpoint.ip, activity_name, actor.user.name
 | table time, device.hostname, process.file.name, process.cmd_line, process.parent_process.file.path
 \`\`\`
 
@@ -193,7 +193,7 @@ Accumulates risk on the specified entity field. Multiple risk commands stack.
 ### Scope first — never a bare \`*\` hunt
 A bare \`*\` search (no keyword, no source/class scope, no entity term) reads every source in the window and slows every other query on the deployment. Start every query with one of:
 - a source: \`metadata.log_source=okta | stats count by actor.user.name\` (names from \`get_source_types\`)
-- a class: \`class_uid=3002 | stats count by actor.user.name\`
+- a class: \`class_uid=3002 | stats count by user.name\` (Authentication puts the account in \`user.name\`)
 - an entity: \`device.hostname="ws-01" | stats count by process.file.name\`, \`actor.user.name=\`, \`src_endpoint.ip=\`, \`file.hashes.value=\`
 - a keyword: \`mimikatz | table time, device.hostname, process.cmd_line\`
 

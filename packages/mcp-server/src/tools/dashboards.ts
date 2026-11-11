@@ -234,7 +234,7 @@ const SCHEMA_GUIDE = {
       {
         id: 'total',
         title: 'Denied events',
-        query: 'metadata.log_source="firewall" activity_name="deny" device.hostname=$host | stats count',
+        query: 'metadata.log_source="firewall" disposition_id=2 device.hostname=$host | stats count',
         queryMode: 'piped',
         visualizationType: 'single_value',
         visualizationConfig: { unit: 'events', showTrend: true },
@@ -245,7 +245,7 @@ const SCHEMA_GUIDE = {
         id: 'by-port',
         title: 'Denies by destination port',
         query:
-          'metadata.log_source="firewall" activity_name="deny" device.hostname=$host | stats count by dst_endpoint.port | sort -count | head 10',
+          'metadata.log_source="firewall" disposition_id=2 device.hostname=$host | stats count by dst_endpoint.port | sort -count | head 10',
         queryMode: 'piped',
         visualizationType: 'bar',
         visualizationConfig: { orientation: 'vertical' },

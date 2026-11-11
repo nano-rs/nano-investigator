@@ -95,8 +95,8 @@ ${entityType === 'ip' ? `**IP Investigation:**
 ${entityType === 'user' ? `**User Investigation:**
 - What hosts did they access? Any privilege escalation?
 - Off-hours activity?
-- Query: \`actor.user.name="${entity}" | stats count, values(dst_endpoint.hostname), values(status_id) by src_endpoint.ip\`
-- Query: \`actor.user.name="${entity}" | where activity_name CONTAINS "privilege" OR process.cmd_line CONTAINS "sudo"\`` : ''}
+- Query: \`class_uid=3002 user.name="${entity}" | stats count, values(dst_endpoint.hostname), values(status_id) by src_endpoint.ip\`
+- Query: \`(actor.user.name="${entity}" OR user.name="${entity}") | where activity_name CONTAINS "privilege" OR process.cmd_line CONTAINS "sudo"\`` : ''}
 
 ${entityType === 'host' ? `**Host Investigation:**
 - What processes ran? Any rare binaries?

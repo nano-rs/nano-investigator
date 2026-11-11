@@ -22,7 +22,7 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 1: Scope the Attack
 - Search for the alerting source IP's authentication activity
-- Query: \`class_uid=3002 src_endpoint.ip="{ip}" | stats count by actor.user.name, dst_endpoint.hostname, status_id\`
+- Query: \`class_uid=3002 src_endpoint.ip="{ip}" | stats count by user.name, dst_endpoint.hostname, status_id\`
 - How many users targeted? How many hosts? Success vs failure ratio (status_id 1 = Success, 2 = Failure)?
 
 ## Step 2: Check for Successful Auth
@@ -37,7 +37,7 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 4: Blast Radius (if successful auth)
 - What did the compromised account do after login?
-- Query: \`actor.user.name="{user}" | sort time | table time, metadata.log_source, class_uid, activity_name, dst_endpoint.hostname, process.file.name\`
+- Query: \`(actor.user.name="{user}" OR user.name="{user}") | sort time | table time, metadata.log_source, class_uid, activity_name, dst_endpoint.hostname, process.file.name\`
 - Look for: lateral movement, privilege escalation, data access
 
 ## Step 5: Historical Context
@@ -69,7 +69,7 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 3: Check Authentication on Target Hosts
 - For each target host, check logon events
-- Query: \`metadata.log_source=windows_security | where metadata.event_code=4624 AND logon_type_id=3 AND src_endpoint.ip="{ip}" | table time, dst_endpoint.hostname, actor.user.name, logon_type_id\`
+- Query: \`class_uid=3002 activity_id=1 logon_type_id IN (3, 8, 10) src_endpoint.ip="{ip}" | table time, dst_endpoint.hostname, user.name, logon_type_id\` (3 network, 8 network cleartext, 10 RDP)
 - Were new accounts created? Were privileges escalated?
 
 ## Step 4: Process Execution on Targets
@@ -189,12 +189,12 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 3: Post-Click Activity
 - For users who clicked, what happened next?
-- Query: \`actor.user.name="{compromised_user}" | sort time | table time, metadata.log_source, class_uid, activity_name, src_endpoint.ip, dst_endpoint.ip, process.file.name\`
+- Query: \`(actor.user.name="{compromised_user}" OR user.name="{compromised_user}") | sort time | table time, metadata.log_source, class_uid, activity_name, src_endpoint.ip, dst_endpoint.ip, process.file.name\`
 - Look for: credential theft (login from new IP), malware download, macro execution
 
 ## Step 4: Credential Compromise
 - Were credentials entered on the phishing site?
-- Query: \`class_uid=3002 activity_id=1 actor.user.name="{user}" status_id=1 | stats values(src_endpoint.ip) by dst_endpoint.hostname\`
+- Query: \`class_uid=3002 activity_id=1 user.name="{user}" status_id=1 | stats values(src_endpoint.ip) by dst_endpoint.hostname\`
 - New source IPs appearing after the phishing email = likely compromise
 
 ## Step 5: Campaign Scope
@@ -218,13 +218,13 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 1: Establish Baseline Behavior
 - What is normal activity for this user?
-- Query: \`actor.user.name="{user}" | timechart span=1d count by metadata.log_source\` (30-day lookback)
+- Query: \`(actor.user.name="{user}" OR user.name="{user}") | timechart span=1d count by metadata.log_source\` (30-day lookback)
 - When do they normally work? What systems do they access?
 
 ## Step 2: Identify Anomalies
 - What changed? Look for deviations from baseline
 - Off-hours activity: Query with time filters outside business hours
-- New systems accessed: \`actor.user.name="{user}" | stats min(time) as first_access by dst_endpoint.hostname | where first_access > "{recent_date}"\`
+- New systems accessed: \`class_uid=3002 activity_id=1 user.name="{user}" | stats min(time) as first_access by dst_endpoint.hostname | where first_access > "{recent_date}"\`
 - Volume anomalies: Sudden increase in data access/transfer
 
 ## Step 3: Data Access Patterns
@@ -239,7 +239,7 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 5: Account Activity
 - Multiple accounts? Privilege escalation?
-- Query: \`src_endpoint.ip IN ({user_ips}) | stats dc(actor.user.name) as identities, values(actor.user.name) by src_endpoint.ip\`
+- Query: \`class_uid=3002 src_endpoint.ip IN ({user_ips}) | stats dc(user.name) as identities, values(user.name) by src_endpoint.ip\`
 - Shared account usage, service account access
 
 ## Step 6: Context and Intent

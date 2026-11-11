@@ -25,9 +25,9 @@
 - **Deployment capabilities** — hosted legacy `search_sql` is unavailable; use nPL for fresh data and `lake_sql` for sealed hours. Open core has alerts, search and prevalence; cases, notebooks, risk and entity-context endpoints require enterprise. Report unavailable capabilities clearly.
 
 - **Free text search** — Just search the term: `connection refused`, `svchost.exe`
-- **Field searches** — `src_endpoint.ip="10.0.0.1"`, `actor.user.name=admin`, `status=500`
+- **Field searches** — `src_endpoint.ip="10.0.0.1"`, `actor.user.name=admin`, `http_response.code=500`
 - **Stats for aggregation** — `| stats count by src_endpoint.ip`, `| stats sum(traffic.bytes_out) by dst_endpoint.ip`
-- **Chain commands** — `metadata.log_source=auth | where action="failed" | stats count by src_endpoint.ip | where count > 10`
+- **Chain commands** — `class_uid=3002 status_id=2 | stats count by src_endpoint.ip | where count > 10`
 
 ## Investigation Methodology
 

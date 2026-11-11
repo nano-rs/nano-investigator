@@ -29,17 +29,17 @@ Anchor on the primary entity (host/user) from the case, not just the matched eve
 
 ```
 # 1. Lead-up: did this behavior exist before the case? (baseline window, e.g. -14d to case start)
-metadata.log_source=windows_sysmon (device.hostname="<host>" OR actor.user.name="<user>") activity_name=process_create
+metadata.log_source=windows_sysmon (device.hostname="<host>" OR actor.user.name="<user>") class_uid=1007 activity_id=1
 | table time, device.hostname, actor.user.name, process.file.name, process.cmd_line, process.parent_process.file.name
 
 # 2. Full local context around the case window (NOT just the matched events) — get the process tree
 metadata.log_source=windows_sysmon (device.hostname="<host>")
-| table time, action, process.file.name, process.cmd_line, process.parent_process.file.name, process.pid, process.parent_process.pid
+| table time, activity_name, process.file.name, process.cmd_line, process.parent_process.file.name, process.pid, process.parent_process.pid
 # widen ±15min first; the loader and the cleanup live just outside the alerts
 
 # 3. Follow-up: is it still happening / has it spread? (case end → now)
 metadata.log_source=windows_sysmon (actor.user.name="<user>") | stats count by device.hostname | sort -count
-metadata.log_source=windows_sysmon (actor.user.name="<user>") activity_name=process_create <suspicious-indicators>
+metadata.log_source=windows_sysmon (actor.user.name="<user>") class_uid=1007 activity_id=1 <suspicious-indicators>
 | table time, device.hostname, process.file.name, process.cmd_line
 ```
 

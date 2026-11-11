@@ -22,12 +22,12 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 1: Scope the Attack
 - Search for the alerting source IP's authentication activity
-- Query: \`metadata.log_source=auth | where src_endpoint.ip="{ip}" | stats count by actor.user.name, dst_endpoint.hostname, status\`
-- How many users targeted? How many hosts? Success vs failure ratio?
+- Query: \`class_uid=3002 src_endpoint.ip="{ip}" | stats count by user.name, dst_endpoint.hostname, status_id\`
+- How many users targeted? How many hosts? Success vs failure ratio (status_id 1 = Success, 2 = Failure)?
 
 ## Step 2: Check for Successful Auth
 - CRITICAL: Did any attempts succeed?
-- Query: \`src_endpoint.ip="{ip}" status=success\`
+- Query: \`class_uid=3002 activity_id=1 src_endpoint.ip="{ip}" status_id=1\`
 - If yes → this is now an incident, not just an attempt
 
 ## Step 3: Entity Context
@@ -37,7 +37,7 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 4: Blast Radius (if successful auth)
 - What did the compromised account do after login?
-- Query: \`actor.user.name="{user}" | sort time | table time, metadata.log_source, action, dst_endpoint.hostname, process.file.name\`
+- Query: \`(actor.user.name="{user}" OR user.name="{user}") | sort time | table time, metadata.log_source, class_uid, activity_name, dst_endpoint.hostname, process.file.name\`
 - Look for: lateral movement, privilege escalation, data access
 
 ## Step 5: Historical Context
@@ -69,7 +69,7 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 3: Check Authentication on Target Hosts
 - For each target host, check logon events
-- Query: \`metadata.log_source=windows_security | where metadata.event_code=4624 AND logon_type_id=3 AND src_endpoint.ip="{ip}" | table time, dst_endpoint.hostname, actor.user.name, logon_type_id\`
+- Query: \`class_uid=3002 activity_id=1 logon_type_id IN (3, 8, 10) src_endpoint.ip="{ip}" | table time, dst_endpoint.hostname, user.name, logon_type_id\` (3 network, 8 network cleartext, 10 RDP)
 - Were new accounts created? Were privileges escalated?
 
 ## Step 4: Process Execution on Targets
@@ -103,7 +103,7 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 ## Step 2: Check the Channel
 - What protocol/method is being used?
 - DNS tunneling: \`src_endpoint.ip="{ip}" | where dst_endpoint.port=53 | stats dc(query.hostname) as unique_queries, count by dst_endpoint.ip\`
-- HTTP/S uploads: \`src_endpoint.ip="{ip}" | where http_method="POST" | stats sum(traffic.bytes_out) by url | sort -sum\`
+- HTTP/S uploads: \`class_uid=4002 src_endpoint.ip="{ip}" http_request.http_method="POST" | stats sum(traffic.bytes_out) as sent by http_request.url.url_string | sort -sent\`
 - Cloud storage: Check for uploads to known cloud storage domains
 
 ## Step 3: Timeline Analysis
@@ -113,7 +113,7 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 4: What Data Was Accessed
 - Before exfiltration, what files/data was accessed on the host?
-- Query: \`device.hostname="{host}" | where activity_name IN ("accessed", "read", "copied") | sort time | table time, file.path, file_size, process.file.name\`
+- Query: \`class_uid=1001 device.hostname="{host}" | where activity_id IN (2, 14) | sort time | table time, activity_name, file.path, file.size, actor.process.file.name\`
 - Look for: bulk file access, database exports, archive creation (zip, 7z, tar)
 
 ## Step 5: Data Staging
@@ -179,28 +179,28 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 1: Identify Recipients
 - Who received the phishing email?
-- Query: \`email_from="{sender}" | stats count, values(email_to) as recipients, values(email_subject) as subjects\`
+- Query: \`email.from="{sender}" | stats count, values(email.to) as recipients, values(email.subject) as subjects\`
 - How many users received it? Is this targeted or spray-and-pray?
 
 ## Step 2: Check for Clicks/Interaction
 - Did anyone click the link or open the attachment?
-- Query: \`url CONTAINS "{phishing_domain}" | stats count by src_endpoint.ip, actor.user.name\`
+- Query: \`(http_request.url.url_string CONTAINS "{phishing_domain}" OR url.url_string CONTAINS "{phishing_domain}") | stats count by src_endpoint.ip, actor.user.name\`
 - Query: \`file.name="{attachment}" | stats count by device.hostname, actor.user.name, activity_name\`
 
 ## Step 3: Post-Click Activity
 - For users who clicked, what happened next?
-- Query: \`actor.user.name="{compromised_user}" | sort time | table time, metadata.log_source, action, src_endpoint.ip, dst_endpoint.ip, process.file.name\`
+- Query: \`(actor.user.name="{compromised_user}" OR user.name="{compromised_user}") | sort time | table time, metadata.log_source, class_uid, activity_name, src_endpoint.ip, dst_endpoint.ip, process.file.name\`
 - Look for: credential theft (login from new IP), malware download, macro execution
 
 ## Step 4: Credential Compromise
 - Were credentials entered on the phishing site?
-- Query: \`actor.user.name="{user}" | where status="success" | stats values(src_endpoint.ip) by dst_endpoint.hostname\`
+- Query: \`class_uid=3002 activity_id=1 user.name="{user}" status_id=1 | stats values(src_endpoint.ip) by dst_endpoint.hostname\`
 - New source IPs appearing after the phishing email = likely compromise
 
 ## Step 5: Campaign Scope
 - Is this part of a larger campaign?
-- Check the sending domain for threat-intel hits (ioc_matched / ioc_threat_type in search)
-- Query: \`email_from=/.*@{sending_domain}$/ | stats count, dc(email_to) as targets by email_subject\`
+- Check the sending domain for threat-intel hits (OCSF enrichment paths, non-empty = hit: enrichments.ioc_domain_threat_type, enrichments.ioc_url_threat_type, enrichments.ioc_src_ip_threat_type, enrichments.ioc_dest_ip_threat_type, enrichments.ioc_hash_threat_type, enrichments.ioc_source)
+- Query: \`email.from=/.*@{sending_domain}$/ | stats count, dc(email.to) as targets by email.subject\`
 
 ## Step 6: Recommend Action
 - Reset credentials for affected users
@@ -218,13 +218,13 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 1: Establish Baseline Behavior
 - What is normal activity for this user?
-- Query: \`actor.user.name="{user}" | timechart span=1d count by metadata.log_source\` (30-day lookback)
+- Query: \`(actor.user.name="{user}" OR user.name="{user}") | timechart span=1d count by metadata.log_source\` (30-day lookback)
 - When do they normally work? What systems do they access?
 
 ## Step 2: Identify Anomalies
 - What changed? Look for deviations from baseline
 - Off-hours activity: Query with time filters outside business hours
-- New systems accessed: \`actor.user.name="{user}" | stats min(time) as first_access by dst_endpoint.hostname | where first_access > "{recent_date}"\`
+- New systems accessed: \`class_uid=3002 activity_id=1 user.name="{user}" | stats min(time) as first_access by dst_endpoint.hostname | where first_access > "{recent_date}"\`
 - Volume anomalies: Sudden increase in data access/transfer
 
 ## Step 3: Data Access Patterns
@@ -239,7 +239,7 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 
 ## Step 5: Account Activity
 - Multiple accounts? Privilege escalation?
-- Query: \`src_endpoint.ip IN ({user_ips}) | stats dc(actor.user.name) as identities, values(actor.user.name) by src_endpoint.ip\`
+- Query: \`class_uid=3002 src_endpoint.ip IN ({user_ips}) | stats dc(user.name) as identities, values(user.name) by src_endpoint.ip\`
 - Shared account usage, service account access
 
 ## Step 6: Context and Intent

@@ -2,12 +2,16 @@
 
 MCP server that turns Claude Code (or any MCP client) into an interactive SOC analyst workstation for [nano](https://nano.rs). Search logs, triage alerts, investigate cases, and hunt threats through natural language.
 
-![Investigating a multi-host intrusion with nano-investigator — correlating cases, confirming the attack chain, and surfacing IOCs](docs/images/investigation-example.png)
+![Investigating a multi-host intrusion with nano-investigator: correlating cases, confirming the attack chain, and surfacing IOCs](docs/images/investigation-example.png)
 
 ## Quick Start
 
+nano v2 runs on ClickHouse. Use the `release/clickhouse-0.1.x` branch (npm
+`latest`, 0.1.x). The `main` branch and the npm `lake` tag are the old lake
+line, and their tools fail against nano v2.
+
 ```bash
-git clone git@github.com:nanos-sh/nano-investigator.git
+git clone -b release/clickhouse-0.1.x https://github.com/nano-rs/nano-investigator.git
 cd nano-investigator
 pnpm install
 pnpm build
